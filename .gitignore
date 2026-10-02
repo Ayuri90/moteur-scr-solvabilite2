@@ -9,10 +9,8 @@ venv/
 .DS_Store
 
 # Données et résultats régénérables
-donnees/*
-!donnees/.gitkeep
-resultats/*
-!resultats/.gitkeep
+donnees/
+resultats/
 
 # Fichiers officiels de tiers, à télécharger soi-même (voir README)
 sources/*
