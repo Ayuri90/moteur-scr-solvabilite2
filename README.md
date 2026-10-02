@@ -65,7 +65,7 @@ cd docs && pdflatex specifications_fonctions.tex
 ## Organisation du dépôt
 
 ```
-projet_scr/
+moteur-scr-solvabilite2/
 ├── config/              hypothèses et paramètres réglementaires, en YAML commenté
 ├── scr_data/            fabrication des données : courbe, mortalité, actifs, passifs, triangles
 ├── scr/                 moteur de calcul : provisions, modules de risque, ESG, ALM, ORSA
@@ -84,10 +84,10 @@ projet_scr/
 
 | Document | Contenu |
 |---|---|
-| `livrables/rapport_scr.pdf` | 18 pages : données, puis pour chaque version la question posée, les méthodes, les hypothèses, les analyses et l'apport. Deux annexes : formulaire et organisation du code |
-| `livrables/cahier_calculs.pdf` | 12 pages : chaque module refait à la main sur les données du projet, avec les étapes intermédiaires, les pièges fréquents et des exercices |
-| `livrables/specifications_fonctions.pdf` | 14 pages : pour chaque fonction, sa raison d'être et la formule appliquée, avec un index des articles du règlement vers les fonctions |
-| `docs/documentation_code.md` | documentation technique : chaque module, les pièges rencontrés et corrigés, les recettes d'extension |
+| [`rapport_scr.pdf`](livrables/rapport_scr.pdf) | 18 pages : données, puis pour chaque version la question posée, les méthodes, les hypothèses, les analyses et l'apport. Deux annexes : formulaire et organisation du code |
+| [`cahier_calculs.pdf`](livrables/cahier_calculs.pdf) | 12 pages : chaque module refait à la main sur les données du projet, avec les étapes intermédiaires, les pièges fréquents et des exercices |
+| [`specifications_fonctions.pdf`](livrables/specifications_fonctions.pdf) | 14 pages : pour chaque fonction, sa raison d'être et la formule appliquée, avec un index des articles du règlement vers les fonctions |
+| [`documentation_code.md`](docs/documentation_code.md) | documentation technique : chaque module, les pièges rencontrés et corrigés, les recettes d'extension |
 
 Aucun chiffre de ces documents n'est saisi à la main : les scripts `generer_rapport.py` et
 `generer_chiffres.py` lisent les sorties du modèle et engendrent les valeurs et les tableaux
