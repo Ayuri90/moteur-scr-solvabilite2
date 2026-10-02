@@ -1,0 +1,706 @@
+% =============================================================================
+% Rapport de synthèse, projet SCR
+% Compilation : pdflatex rapport_scr.tex (deux fois)
+% Les chiffres et les tableaux proviennent de chiffres.tex, engendré par
+% rapport/generer_rapport.py à partir des sorties du modèle.
+% =============================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage{textcomp}
+\usepackage[utf8]{inputenc}
+\IfFileExists{french.ldf}{\usepackage[french]{babel}}{%
+  \renewcommand{\tablename}{Tableau}\renewcommand{\figurename}{Figure}
+  \renewcommand{\contentsname}{Table des matières}}
+\IfFileExists{lmodern.sty}{\usepackage{lmodern}}{\usepackage{mathptmx}}
+\usepackage[margin=2.3cm,headheight=14pt]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{xcolor}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{siunitx}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{caption}
+\usepackage{float}
+\usepackage{enumitem}
+\usepackage{microtype}
+\usepackage{mdframed}
+\usepackage[hidelinks]{hyperref}
+
+\sisetup{group-separator={\,},group-minimum-digits=4,output-decimal-marker={,},
+         detect-weight=true,detect-family=true}
+\definecolor{bleufonce}{HTML}{1F3864}
+\definecolor{grisclair}{HTML}{F4F6FA}
+\definecolor{rouge}{HTML}{C00000}
+\definecolor{vertfonce}{HTML}{375623}
+
+\titleformat{\section}{\color{bleufonce}\large\bfseries}{\thesection}{0.7em}{}
+\titleformat{\subsection}{\color{bleufonce}\normalsize\bfseries}{\thesubsection}{0.6em}{}
+\captionsetup{font=small,labelfont={bf,color=bleufonce}}
+\setlist[itemize]{itemsep=2pt,topsep=3pt,leftmargin=1.2em}
+\setlist[enumerate]{itemsep=2pt,topsep=3pt,leftmargin=1.4em}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\color{bleufonce}Calcul complet du SCR, compagnie composite}
+\fancyhead[R]{\small\color{bleufonce}\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\newmdenv[backgroundcolor=grisclair,linecolor=bleufonce,linewidth=0.8pt,
+          innertopmargin=6pt,innerbottommargin=6pt,skipabove=8pt,skipbelow=8pt]{encadre}
+\newcommand{\apport}[1]{\par\smallskip\noindent\textcolor{vertfonce}{\textbf{Apport de cette
+version.}} #1\par\smallskip}
+\newcommand{\Meuro}{\text{M\texteuro}}
+
+\input{chiffres}
+
+% =============================================================================
+\begin{document}
+
+\begin{titlepage}
+\centering
+\vspace*{2.5cm}
+{\color{bleufonce}\Huge\bfseries Calcul complet du SCR\par}
+\vspace{0.6cm}
+{\color{bleufonce}\LARGE d'une compagnie d'assurance composite\par}
+\vspace{1.2cm}
+{\large Formule standard, modèle ALM stochastique, régime 2027,\\[2pt]
+modèle interne partiel et ORSA\par}
+\vspace{2.2cm}
+{\large\bfseries Frege \textsc{Meli Kouyem}\par}
+\vspace{0.3cm}
+{Master 2 Actuariat, ISFA, Université Claude Bernard Lyon 1\par}
+\vspace{2.5cm}
+\begin{minipage}{0.82\linewidth}\small\itshape
+Projet personnel. Les calculs portent sur une compagnie fictive, calibrée sur des données
+publiques réelles : le rapport sur la solvabilité et la situation financière 2025 du groupe
+MACSF, les statistiques de placements de l'ACPR, la courbe des taux publiée par l'EIOPA et les
+tables de mortalité réglementaires françaises. Date d'évaluation : 31 décembre 2025.
+\end{minipage}
+\vfill
+{\small Environ \num{3700} lignes de Python, 60 tests automatisés\par}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% =============================================================================
+\section{Ce que contient ce rapport}
+
+Le projet reconstitue, de bout en bout, le capital de solvabilité requis d'une compagnie
+composite : de la construction des données jusqu'au ratio projeté à cinq ans. Il est organisé en
+cinq versions successives, chacune levant une limite de la précédente.
+
+Chaque version est présentée de la même façon : la question à laquelle elle répond, les méthodes
+retenues, les hypothèses structurantes, les analyses clés, puis l'apport par rapport à la version
+antérieure. Un lecteur pressé peut se limiter aux encadrés de résultats et aux paragraphes
+intitulés « apport de cette version ».
+
+\begin{encadre}
+\textbf{Résultats d'ensemble.} Pour un actif de \ActifTotal{} \Meuro{}, le SCR ressort à
+\ScrVdeux{} \Meuro{} et le ratio de couverture à \RatioVdeux{}. Le risque de marché en porte
+l'essentiel, ce qui est le profil attendu d'un assureur à dominante épargne. Le modèle ALM
+stochastique dégage une capacité d'absorption par les provisions techniques de \LacTPVdeux{}
+\Meuro{}. Le régime applicable en 2027 porte le SCR à \ScrReforme{} \Meuro{} et ramène le ratio à
+\RatioReforme{}. Sous stress combiné, le ratio projeté touche un point bas de \RatioOrsaCrise{},
+sans franchir le seuil d'alerte.
+\end{encadre}
+
+\begin{table}[H]\centering\small
+\caption{Les cinq versions et leur apport principal}
+\begin{tabularx}{\linewidth}{lXr}
+\toprule
+\textbf{Version} & \textbf{Apport principal} & \textbf{SCR (\Meuro{})}\\
+\midrule
+V1 & formule standard complète, provisions déterministes & \ScrVun{}\\
+V2 & scénarios économiques, ALM stochastique, absorption mesurée & \ScrVdeux{}\\
+V3 & chiffrage de la réforme applicable en 2027 & \ScrReforme{}\\
+V4 & modèle interne partiel non-vie et paramètres propres & \ScrVdeux{}\\
+V5 & projection à cinq ans et scénarios adverses & \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% =============================================================================
+\section{La compagnie et ses données}
+
+\subsection{Pourquoi une compagnie fictive}
+
+Aucune base publique ne fournit le portefeuille détaillé d'un assureur : ni les model points de
+passif, ni l'inventaire d'actifs ligne à ligne. La démarche retenue consiste donc à construire une
+compagnie fictive, mais calibrée sur des données publiques réelles. Les masses de bilan et la
+décomposition du SCR viennent du SFCR 2025 du groupe MACSF, ramenées à un facteur d'échelle
+d'environ un quart. L'allocation d'actifs suit les statistiques de placements de l'ACPR après mise
+en transparence. La courbe des taux et les facteurs de choc proviennent du fichier EIOPA du
+31 décembre 2025. Les tables de mortalité sont les tables réglementaires TH et TF 00-02 pour les
+garanties décès, TGH05 et TGF05 pour les rentes, ces dernières étant utilisées en générationnel.
+
+\subsection{Le portefeuille en quelques chiffres}
+
+\begin{table}[H]\centering\small
+\caption{Volumétrie des données produites}
+\begin{tabularx}{\linewidth}{Xr}
+\toprule
+\textbf{Élément} & \textbf{Valeur}\\
+\midrule
+Actif total & \ActifTotal{} \Meuro{}\\
+Lignes d'actifs dans l'inventaire & \LignesInventaire{}\\
+Model points de passif vie et santé & \ModelPoints{}\\
+Provisions mathématiques, épargne euro & \PMeuro{} \Meuro{}\\
+Provisions mathématiques, unités de compte & \PMuc{} \Meuro{}\\
+Capitaux sous risque, temporaire décès & \CapitauxSousRisque{} \Meuro{}\\
+Primes annuelles non-vie & \PrimesNonVie{} \Meuro{}\\
+Primes annuelles santé, frais de soins & \PrimesSante{} \Meuro{}\\
+Triangles de règlements & 5 lignes d'activité sur 10 ans\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{figure}[H]\centering
+\includegraphics[width=0.84\linewidth]{figures/allocation.png}
+\caption{Allocation du portefeuille du fonds euro, après mise en transparence des OPC.}
+\end{figure}
+
+\subsection{Trois choix structurants}
+
+\textbf{Structure juridique.} Le principe de spécialisation interdit en France qu'une même entité
+exerce à la fois l'assurance vie et l'assurance non-vie. La compagnie est modélisée comme une
+entité composite unique, hypothèse explicitement documentée. La scinder en deux entités solo et
+calculer un SCR groupe constituerait une extension naturelle.
+
+\textbf{Traçabilité des hypothèses.} Chaque paramètre du fichier de configuration porte une
+étiquette indiquant sa nature : donnée réelle issue d'un SFCR, ordre de grandeur de marché, valeur
+vérifiée dans le règlement, valeur restant à confronter au texte, ou choix de modélisation. Cette
+discipline permet de savoir à tout moment ce qui est solide et ce qui reste provisoire.
+
+\textbf{Reproductibilité.} La graine aléatoire est fixée et propre à chaque module, de sorte
+qu'une modification du passif ne déplace pas les tirages de l'actif. Soixante tests automatisés
+vérifient les invariants : valorisation exacte des swaps par la courbe, tests de martingale du
+générateur de scénarios, égalité comptable à chaque pas de projection, cohérence du SCR avec ses
+composantes.
+
+% =============================================================================
+\section{V1, la formule standard}
+
+\subsection{La question posée}
+
+Quel capital la formule standard exige-t-elle de cette compagnie, tous modules compris, et la
+décomposition obtenue ressemble-t-elle à celle d'un assureur réel de profil comparable ?
+
+\subsection{Méthodes retenues}
+
+\begin{itemize}
+\item \textbf{Provisions vie.} Projection model point par model point sur 60 ans :
+      revalorisation, rachats structurels, décès, frais, puis actualisation sur la courbe EIOPA.
+\item \textbf{Provisions non-vie.} Chain Ladder sur les triangles de règlements, puis
+      actualisation des réserves selon la cadence estimée et majoration des frais de gestion.
+\item \textbf{Modules de risque.} Chaque choc est évalué en recalculant intégralement les fonds
+      propres de base. Le SCR d'un sous-module est la perte de fonds propres qu'il provoque, et
+      non la seule perte d'actif.
+\item \textbf{Agrégation.} Matrices de corrélation de l'annexe IV, avec le paramètre dépendant du
+      scénario de taux retenu.
+\end{itemize}
+
+\subsection{Hypothèses fondamentales}
+
+\begin{table}[H]\centering\small
+\caption{Hypothèses structurantes de la V1}
+\begin{tabularx}{\linewidth}{lX}
+\toprule
+\textbf{Hypothèse} & \textbf{Valeur et justification}\\
+\midrule
+Courbe des taux & EIOPA au 31/12/2025, sans correction pour volatilité\\
+Revalorisation de l'épargne & maximum entre le taux garanti et 85 \% du rendement attendu\\
+Rachats & structurels uniquement, avec le pic fiscal à huit ans\\
+Ajustement symétrique & \AjustementSymetrique{} \%, valeur EIOPA du 31/12/2025\\
+Absorption par les provisions & implicite, via la règle de revalorisation\\
+Absorption fiscale & plafonnée aux impôts différés passifs, majorés de la moitié de l'écart au
+plafond réglementaire\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Analyses clés}
+
+\begin{table}[H]\centering\small
+\caption{Best estimate par segment, en \Meuro{}, projection déterministe}
+\begin{tabularx}{0.68\linewidth}{Xr}
+\toprule
+\textbf{Segment} & \textbf{BE}\\
+\midrule
+\tableauBE
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Le SCR s'établit à \ScrVun{} \Meuro{} pour des fonds propres de base de \FondsPropresVun{}
+\Meuro{}, soit un ratio de \RatioVun{}.
+
+\textbf{La décomposition se compare bien au marché.} Exprimée en pourcentage du SCR, elle donne un
+risque de marché de \qty{98}{\percent} contre \qty{93}{\percent} pour le groupe de référence, une
+souscription vie de \qty{38}{\percent} contre \qty{46}{\percent}, un risque opérationnel de
+\qty{4}{\percent} contre \qty{7}{\percent}. Les écarts s'expliquent par une activité non-vie
+proportionnellement plus petite et des impôts différés passifs plus faibles. Ce rapprochement
+constitue la première validation du modèle.
+
+\textbf{Le Chain Ladder sous-estime les branches longues.} Sur des triangles de dix ans, il manque
+de \qty{26}{\percent} à \qty{30}{\percent} des réserves en responsabilité civile, faute d'observer
+le facteur de queue. Comme la simulation connaît les ultimes réels, cet écart est mesurable, ce
+qui serait impossible sur données réelles.
+
+\textbf{Le rachat massif domine le module vie.} Il n'est appliqué qu'aux contrats dont le rachat
+génère effectivement une perte, contrat par contrat, comme le demande l'article 142. Une
+application globale sous-estimerait le choc, les contrats favorables venant compenser.
+
+\apport{La V1 pose l'ossature : données, provisions, modules, agrégation, MCR. Elle fournit un
+point de comparaison chiffré à toutes les versions suivantes, et met au jour deux limites qui
+justifient la suite : l'absorption par la participation aux bénéfices reste implicite, et les
+options et garanties financières ne sont pas valorisées.}
+
+% =============================================================================
+\section{V2, le modèle ALM stochastique}
+
+\subsection{La question posée}
+
+Combien vaut réellement la capacité d'absorption par les provisions techniques, et quelle est la
+valeur temps des options et garanties du fonds euro ? Ces deux montants sont invisibles dans un
+calcul déterministe.
+
+\subsection{Méthodes retenues}
+
+\begin{itemize}
+\item \textbf{Générateur de scénarios économiques.} Taux court suivant un modèle de Hull-White à
+      un facteur, ajusté pour reproduire exactement la courbe initiale. Action et immobilier en
+      mouvements browniens géométriques corrélés au taux, sous probabilité risque-neutre.
+      Variables antithétiques pour réduire la variance.
+\item \textbf{Projection actif-passif.} Le canton épargne euro est projeté par cohortes :
+      rendement comptable du portefeuille obligataire avec renouvellement progressif, réalisation
+      de plus-values latentes, taux cible indexé sur le dix ans, participation aux bénéfices,
+      provision pour participation aux excédents avec reprise sur huit ans, rachats structurels et
+      conjoncturels selon les lois de l'ACPR.
+\item \textbf{Trois jeux d'actions du management.} Revalorisation dynamique pour le calcul net,
+      revalorisation figée au taux cible pour le calcul brut, taux garanti seul pour isoler les
+      prestations discrétionnaires futures.
+\end{itemize}
+
+\subsection{Hypothèses fondamentales}
+
+\begin{table}[H]\centering\small
+\caption{Hypothèses structurantes de la V2}
+\begin{tabularx}{\linewidth}{lX}
+\toprule
+\textbf{Hypothèse} & \textbf{Valeur et justification}\\
+\midrule
+Nombre de scénarios & \NbScenarios{}, horizon de projection \HorizonAlm{} ans\\
+Volatilité du taux court & \qty{1}{\percent}, ordre de grandeur non calibré sur swaptions\\
+Volatilité action & \qty{20}{\percent}, ordre de grandeur non calibré sur options\\
+Taux cible servi & 80 \% du taux dix ans lissé, majoré de 20 points de base\\
+Rachats conjoncturels & lois de l'ACPR, courbe moyenne entre plancher et plafond\\
+Allocation du canton euro & proportionnelle aux engagements du fonds, PPE comprise\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Analyses clés}
+
+\textbf{Le générateur est market-consistent.} Les tests de martingale montrent un écart maximal de
+\EcartMartingaleMax{} points de base sur les déflateurs, ce qui valide la simulation avant toute
+interprétation des provisions.
+
+\textbf{L'absorption devient mesurable.} Sur les chocs d'actif, la baisse du rendement financier
+réduit le taux servi, donc une partie de la perte est reportée sur les assurés. L'ajustement
+ressort à \LacTPVdeux{} \Meuro{}, bien en deçà du plafond des prestations discrétionnaires
+futures, évaluées à \FDB{} \Meuro{}.
+
+\begin{figure}[H]\centering
+\includegraphics[width=0.80\linewidth]{figures/chocs_euro.png}
+\caption{Variation du best estimate du fonds euro sous chaque choc, en calcul net et brut
+d'absorption. L'écart entre les deux barres est la capacité d'absorption.}
+\end{figure}
+
+\textbf{La valeur temps des options est négative.} Le best estimate stochastique s'établit à
+\BEeuroVdeux{} \Meuro{}, contre \BEeuroCentral{} \Meuro{} en scénario central : la valeur temps
+vaut donc \TVOG{} \Meuro{}. Ce résultat n'est pas une anomalie. La règle de revalorisation, qui
+prend le minimum entre le rendement et le taux cible, est concave : l'assureur conserve l'excédent
+au-delà de la cible, tandis que le plancher garanti, presque partout nul dans ce portefeuille,
+n'est quasiment jamais atteint.
+
+En décalant les taux minimums garantis, on retrouve la forme en cloche caractéristique d'une
+valeur temps : maximale lorsque la garantie est à la monnaie, autour de deux points, puis
+décroissante lorsqu'elle devient intrinsèque et exerçable dans tous les scénarios.
+
+\begin{figure}[H]\centering
+\includegraphics[width=0.72\linewidth]{figures/tvog.png}
+\caption{Valeur temps des options et garanties selon le niveau des taux minimums garantis.}
+\end{figure}
+
+\textbf{Deux effets se compensent au niveau du ratio.} Le best estimate augmente, donc les fonds
+propres passent de \FondsPropresVun{} à \FondsPropresVdeux{} \Meuro{}. Mais le SCR baisse de
+\ScrVun{} à \ScrVdeux{} \Meuro{} grâce à l'absorption. Le ratio passe ainsi de \RatioVun{} à
+\RatioVdeux{}.
+
+\begin{table}[H]\centering\small
+\caption{Tableau S.25.01, capital de solvabilité requis, en \Meuro{}}
+\begin{tabularx}{0.78\linewidth}{Xr}
+\toprule
+\textbf{Poste} & \textbf{Montant}\\
+\midrule
+\tableauSXXV
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{figure}[H]\centering
+\includegraphics[width=0.86\linewidth]{figures/modules.png}
+\caption{Décomposition du capital de solvabilité requis. Les modules sont présentés bruts
+d'absorption, les ajustements figurant séparément.}
+\end{figure}
+
+\apport{La V2 transforme une absorption implicite en un montant chiffré et défendable, et fournit
+la valeur temps des options, que la V1 ne pouvait pas voir. Elle installe aussi l'outil dont
+toutes les versions suivantes se servent : un générateur de scénarios validé et un modèle ALM
+capable de rejouer n'importe quel choc en net et en brut.}
+
+% =============================================================================
+\section{V3, l'impact du régime 2027}
+
+\subsection{La question posée}
+
+De combien le ratio bouge-t-il sous le Règlement délégué (UE) 2026/269, adopté le 29 octobre 2025,
+publié au Journal officiel le 18 février 2026 et applicable au 30 janvier 2027 ? Et quelles
+modifications comptent réellement ?
+
+\subsection{Méthodes retenues}
+
+Le calcul de la V2 est rejoué en empilant les modifications une à une, ce qui produit un pont du
+ratio. Chaque étape isole un changement : extrapolation alternative de la courbe, chocs de taux
+révisés, corrélation entre taux et spread, corridor de l'ajustement symétrique, facteur de
+réassurance non proportionnelle, puis marge de risque. Une marge de risque a également été
+recalculée sous le régime actuel, car la V1 la figeait par hypothèse.
+
+\subsection{Hypothèses fondamentales}
+
+\begin{table}[H]\centering\small
+\caption{Hypothèses structurantes de la V3}
+\begin{tabularx}{\linewidth}{lX}
+\toprule
+\textbf{Hypothèse} & \textbf{Valeur et justification}\\
+\midrule
+Extrapolation & premier point de lissage à 20 ans, convergence vers l'UFR à \qty{10}{\percent}\\
+Chocs de taux & composante multiplicative et décalage parallèle, tables saisies de mémoire et
+signalées comme restant à vérifier\\
+Marge de risque & coût du capital ramené de \qty{6}{\percent} à \qty{4.75}{\percent}, avec
+dégressivité temporelle\\
+Assiette de la marge de risque & SCR des risques non couvrables, donc hors risque de marché\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Analyses clés}
+
+\begin{table}[H]\centering\small
+\caption{Pont du ratio de solvabilité, du régime actuel au régime 2027}
+\begin{tabularx}{\linewidth}{Xrrr}
+\toprule
+\textbf{Étape} & \textbf{SCR} & \textbf{$\Delta$ SCR} & \textbf{Ratio}\\
+\midrule
+\tableauPont
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{figure}[H]\centering
+\includegraphics[width=0.90\linewidth]{figures/pont_2027.png}
+\caption{Trajectoire du ratio au fil des modifications réglementaires.}
+\end{figure}
+
+\textbf{Les chocs de taux portent tout l'impact défavorable}, soit \ImpactChocsTaux{} \Meuro{}.
+Le passage à un choc combinant composante multiplicative et décalage parallèle, avec suppression du
+plancher d'un point à la hausse, alourdit nettement la charge. Une analyse de sensibilité montre
+que sans le décalage parallèle, l'impact devient nul : tout dépend donc de tables encore non
+vérifiées. C'est le point à fiabiliser en priorité.
+
+\textbf{Deux allègements restent sans effet ici.} La corrélation entre taux et spread ramenée de
+\num{0.50} à \num{0.25} ne joue qu'en scénario baissier, or la compagnie retient le scénario
+haussier. Le corridor élargi de l'ajustement symétrique ne mordrait qu'en cas de marché très
+haussier ou très baissier, alors que la valeur du 31 décembre 2025 se situe à l'intérieur des deux
+corridors.
+
+\textbf{L'extrapolation alternative est neutre} sur la courbe de fin 2025. Conçue dans
+l'environnement de taux bas, elle ne déplace plus la courbe que de quelques points de base au-delà
+de trente ans.
+
+\textbf{La marge de risque est le vrai gain}, passant de \MargeRisqueActuelle{} à
+\MargeRisqueReforme{} \Meuro{}, soit une baisse de \qty{40}{\percent}.
+
+\apport{La V3 transforme le modèle en outil d'étude d'impact réglementaire. Elle corrige au passage
+une faiblesse de la V1, la marge de risque figée par hypothèse, et montre que la lecture habituelle
+de la réforme mérite d'être nuancée : ce n'est pas l'extrapolation qui compte pour cette
+compagnie, mais les chocs de taux et la marge de risque.}
+
+% =============================================================================
+\section{V4, le modèle interne partiel non-vie}
+
+\subsection{La question posée}
+
+La formule standard décrit-elle correctement le risque non-vie de ce portefeuille ? Et que change
+une modélisation interne, notamment sur la dépendance entre risques ?
+
+\subsection{Méthodes retenues}
+
+\begin{itemize}
+\item \textbf{Réserves.} Bootstrap ODP sur les triangles : rééchantillonnage des résidus de
+      Pearson, puis bruit de processus gamma, ce qui donne la distribution complète du boni-mali.
+\item \textbf{Primes.} Loi log-normale ajustée sur l'historique des sinistres à primes ultimes
+      estimés par Chain Ladder, majorée d'une incertitude d'estimation.
+\item \textbf{Catastrophe.} Fréquence de Poisson et sévérité de Pareto généralisée au-delà d'un
+      seuil, avec application du traité en excédent de sinistres événement par événement.
+\item \textbf{Agrégation.} Copules gaussienne et de Student, ce qui permet de comparer deux
+      structures de dépendance à marginales identiques.
+\item \textbf{Paramètres propres.} L'écart type spécifique du risque de réserve est déduit du
+      bootstrap, puis mélangé au paramètre de marché par le facteur de crédibilité.
+\end{itemize}
+
+\subsection{Hypothèses fondamentales}
+
+\begin{table}[H]\centering\small
+\caption{Hypothèses structurantes de la V4}
+\begin{tabularx}{\linewidth}{lX}
+\toprule
+\textbf{Hypothèse} & \textbf{Valeur et justification}\\
+\midrule
+Mesure de risque & valeur en risque à \qty{99.5}{\percent}, en écart à la moyenne\\
+Degrés de liberté de la copule de Student & 6, ce qui crée une dépendance de queue marquée\\
+Corrélations entre blocs & choix de modélisation, à justifier en annexe d'un dossier réel\\
+Sévérité catastrophe & indice de queue de \num{0.35}, paramètre indicatif\\
+Crédibilité des paramètres propres & \num{0.74}, correspondant à dix années d'historique\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Analyses clés}
+
+\begin{figure}[H]\centering
+\includegraphics[width=0.90\linewidth]{figures/v4_distribution_non_vie.png}
+\caption{Distribution agrégée des charges non-vie à un an, selon la copule retenue.}
+\end{figure}
+
+\begin{table}[H]\centering\small
+\caption{Comparaison des mesures du risque de souscription non-vie, en \Meuro{}}
+\begin{tabularx}{\linewidth}{Xrrr}
+\toprule
+\textbf{Mesure} & \textbf{SCR non-vie} & \textbf{SCR total} & \textbf{Ratio}\\
+\midrule
+\tableauModeleInterne
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\textbf{La formule standard est bien calibrée pour ce portefeuille.} Le modèle interne avec copule
+de Student, à \ScrNonVieMIS{} \Meuro{}, retrouve presque exactement la formule standard, à
+\ScrNonVieFS{} \Meuro{}. Ce n'est pas fortuit : la formule standard a été calibrée pour reproduire
+une valeur en risque à \qty{99.5}{\percent} sur un portefeuille moyen, et le nôtre est proche de
+la moyenne.
+
+\textbf{La dépendance de queue coûte \qty{6}{\percent} de capital.} Le passage de la copule
+gaussienne à celle de Student ajoute \num{5.4} \Meuro{}, alors que les marginales sont identiques.
+Cet effet est invisible dans une agrégation par matrice de corrélation, qui ne retient que la
+dépendance moyenne.
+
+\textbf{La réassurance agit surtout sur la queue.} Le traité divise la charge catastrophe par
+\num{2.6}, de \CatBrute{} \Meuro{} brut à \CatNette{} \Meuro{} net. L'écart entre la valeur en
+risque et la perte moyenne au-delà de ce seuil, soit \CatBruteTVaR{} \Meuro{} contre \CatBrute{}
+\Meuro{}, illustre l'épaisseur de la queue et l'argument en faveur de la mesure retenue par le
+référentiel suisse.
+
+\begin{table}[H]\centering\small
+\caption{Écarts types du risque de réserve : propres, standards et retenus}
+\begin{tabularx}{0.82\linewidth}{Xrrr}
+\toprule
+\textbf{Ligne d'activité} & \textbf{Propres} & \textbf{Annexe II} & \textbf{Retenu}\\
+\midrule
+\tableauUSP
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\textbf{Les paramètres propres doivent être lus avec prudence.} Ils ressortent nettement sous les
+paramètres de marché et réduisent le SCR non-vie de \qty{12}{\percent}. Deux réserves s'imposent.
+D'une part, les triangles simulés présentent une volatilité inférieure à la moyenne du marché.
+D'autre part, et surtout, le bootstrap mesure l'incertitude conditionnellement au modèle Chain
+Ladder : il ne capte ni le risque de queue de développement identifié en V1, ni le risque de
+modèle.
+
+\textbf{Le rapprochement avec le code CIMA éclaire les référentiels.} La marge de solvabilité
+CIMA, calculée sur le même bilan, s'élève à \CimaTotal{} \Meuro{}, soit entre le MCR et le SCR.
+La différence de philosophie est nette : la marge CIMA est une exigence forfaitaire indexée sur les
+volumes, insensible à l'allocation d'actifs. Or cette compagnie porte l'essentiel de son besoin de
+capital en risque de marché, totalement invisible dans la formule CIMA.
+
+\apport{La V4 apporte une mesure de risque construite plutôt que paramétrée, et la possibilité de
+tester ce que la formule standard ne voit pas : la dépendance de queue, l'effet fin de la
+réassurance, et la spécificité du portefeuille via les paramètres propres. Elle donne aussi un
+point de comparaison entre référentiels prudentiels.}
+
+% =============================================================================
+\section{V5, l'ORSA}
+
+\subsection{La question posée}
+
+Le ratio tient-il sur l'horizon du plan, et quels risques le mettent réellement sous tension ? La
+question n'est plus celle d'un capital à une date, mais celle d'une trajectoire.
+
+\subsection{Méthodes retenues}
+
+Le bilan, le SCR et le ratio sont projetés sur cinq ans à partir du bilan de la V2. Le compte de
+résultat est bouclé, de sorte que l'actif se déduit du passif augmenté des fonds propres :
+l'égalité comptable est ainsi vraie par construction et vérifiée par un test. Le SCR projeté est
+mis à l'échelle d'inducteurs de volume, puis réagrégé chaque année, ce qui est la simplification
+usuelle en ORSA. Six scénarios adverses sont testés, complétés par des stress inversés qui
+cherchent, par dichotomie, l'amplitude de choc amenant le ratio à la limite d'appétence.
+
+\subsection{Hypothèses fondamentales}
+
+\begin{table}[H]\centering\small
+\caption{Hypothèses structurantes de la V5}
+\begin{tabularx}{\linewidth}{lX}
+\toprule
+\textbf{Hypothèse} & \textbf{Valeur et justification}\\
+\midrule
+Plan d'affaires & décollecte progressive du fonds euro, croissance des primes non-vie de
+\qty{3}{\percent}\\
+Distribution & \qty{30}{\percent} du résultat net\\
+Appétence & limite à \qty{130}{\percent}, alerte à \qty{160}{\percent}, cible à
+\qty{200}{\percent}\\
+SCR projeté & mis à l'échelle des volumes, sensible à la déformation de l'allocation à hauteur de
+\qty{30}{\percent}\\
+Actions du management & aucune, ce qui rend les scénarios volontairement sévères\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Analyses clés}
+
+En scénario central, le ratio s'érode doucement de \RatioVdeux{} à \RatioOrsaCentral{}. Le résultat
+net progresse, mais une partie part en dividendes et le SCR croît avec les volumes.
+
+\begin{table}[H]\centering\small
+\caption{Scénarios adverses : ratio minimal et statut au regard de l'appétence}
+\begin{tabularx}{\linewidth}{Xrrl}
+\toprule
+\textbf{Scénario} & \textbf{Ratio min.} & \textbf{Ratio final} & \textbf{Statut}\\
+\midrule
+\tableauOrsa
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{figure}[H]\centering
+\includegraphics[width=0.92\linewidth]{figures/v5_trajectoires_orsa.png}
+\caption{Trajectoires du ratio de couverture sous les scénarios adverses.}
+\end{figure}
+
+\textbf{Le classement des risques est contre-intuitif.} Le krach actions, qui inquiète toujours les
+instances de gouvernance, coûte moins que la hausse des taux couplée aux rachats, dont le point bas
+s'établit à \RatioOrsaTaux{}, et que la crise combinée, à \RatioOrsaCrise{}. Ce classement recoupe
+les conclusions de la V2, où le choc de taux haussier dominait le module marché, et de la V3, où la
+réforme l'aggrave encore.
+
+\textbf{Le profil de risque réel dépasse le SCR réglementaire.} Au SCR s'ajoutent les risques mal
+captés par la formule standard, à savoir la liquidité, le cyber, le risque de modèle et le climat,
+évalués à dire d'expert puis diversifiés. Le besoin global ressort à \BesoinGlobal{} \Meuro{}, soit
+\qty{13}{\percent} au-dessus du SCR. C'est le message central de tout exercice ORSA.
+
+\apport{La V5 fait passer le projet du calcul au pilotage. Elle relie les résultats des versions
+précédentes à des décisions : seuils d'appétence, capital à injecter, hiérarchie des risques à
+surveiller. Elle montre enfin que le risque dominant d'une compagnie n'est pas toujours celui
+qu'on redoute le plus.}
+
+% =============================================================================
+\section{Ce que chaque version a apporté}
+
+\begin{table}[H]\centering\small
+\caption{Progression du projet, version par version}
+\begin{tabularx}{\linewidth}{lXX}
+\toprule
+\textbf{Version} & \textbf{Limite levée} & \textbf{Nouvelle capacité}\\
+\midrule
+V1 & aucune base de comparaison & calcul complet de la formule standard, validé par rapprochement
+avec un SFCR réel\\
+V2 & absorption implicite, options non valorisées & capacité d'absorption chiffrée, valeur temps
+des options, rachats dynamiques\\
+V3 & marge de risque figée, régime unique & étude d'impact réglementaire complète, avec
+sensibilités sur les paramètres incertains\\
+V4 & risque non-vie réduit à des facteurs & distribution complète des pertes, dépendance de queue,
+paramètres propres à l'entreprise\\
+V5 & vision à une seule date & trajectoire à cinq ans, scénarios adverses, stress inversés, besoin
+global de solvabilité\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% =============================================================================
+\section{Limites et prolongements}
+
+Toutes les simplifications sont documentées dans le code. Les principales sont les suivantes.
+
+\begin{itemize}
+\item \textbf{Paramètres réglementaires.} La courbe, ses facteurs de choc et la table de spread
+      proviennent de sources officielles. Restent à confronter au texte les probabilités de défaut,
+      les seuils de concentration, les facteurs du MCR et les tables de chocs du régime 2027.
+\item \textbf{Calibrage du générateur.} Les volatilités du modèle de taux et de l'action sont des
+      ordres de grandeur, et non le résultat d'un calibrage sur prix de swaptions et d'options.
+\item \textbf{Catastrophes.} Les modules catastrophe non-vie et santé sont paramétriques. Les
+      annexes du règlement, avec leur découpage par zones, restent à implémenter.
+\item \textbf{Provisionnement.} L'absence de facteur de queue biaise à la baisse les réserves des
+      branches longues, et par conséquent les paramètres propres.
+\item \textbf{ORSA.} Le SCR projeté est mis à l'échelle de volumes plutôt que recalculé, et aucune
+      action du management n'est déclenchée au franchissement des seuils.
+\end{itemize}
+
+Les prolongements naturels sont un modèle interne vie, la scission en entités solo avec calcul d'un
+SCR groupe, et une comparaison approfondie avec la norme internationale de l'IAIS ou le référentiel
+suisse.
+
+% =============================================================================
+\newpage
+\input{annexe_formulaire}
+
+\newpage
+\section*{Annexe B, organisation du code}
+\addcontentsline{toc}{section}{Annexe B, organisation du code}
+
+\begin{table}[H]\centering\small
+\begin{tabularx}{\linewidth}{lX}
+\toprule
+\textbf{Module} & \textbf{Rôle}\\
+\midrule
+\texttt{scr\_data/} & génération des données : courbe, mortalité, inventaire d'actifs, model
+points, triangles, expositions\\
+\texttt{scr/passif.py} & best estimate déterministe, Chain Ladder actualisé\\
+\texttt{scr/marche.py} & module de marché, courbes choquées, revalorisation ligne à ligne\\
+\texttt{scr/souscription.py} & souscription vie et santé\\
+\texttt{scr/non\_vie.py} & primes et réserves, rachat, catastrophe\\
+\texttt{scr/contrepartie.py} & défaut de type 1 et 2\\
+\texttt{scr/agregation.py} & BSCR, opérationnel, ajustements, SCR, MCR, S.25.01\\
+\texttt{scr/esg.py} & générateur de scénarios et tests de martingale\\
+\texttt{scr/alm.py} & projection actif-passif du fonds euro\\
+\texttt{scr/reforme.py} & régime 2027 : extrapolation, chocs, paramètres révisés\\
+\texttt{scr/marge\_risque.py} & marge de risque, actuelle et révisée\\
+\texttt{scr/modele\_interne.py} & bootstrap, copules, mesures de risque, paramètres propres\\
+\texttt{scr/orsa.py} & projection pluriannuelle et besoin global de solvabilité\\
+\texttt{tests/} & 60 tests automatisés\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\vfill
+\begin{center}\small\itshape
+Les valeurs et tableaux de ce rapport sont engendrés automatiquement à partir des sorties du
+modèle, sans recopie manuelle.
+\end{center}
+
+\end{document}

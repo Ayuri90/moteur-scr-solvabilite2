@@ -1,0 +1,856 @@
+% =============================================================================
+% Spécifications fonctionnelles — projet SCR
+% Pour chaque fonction : pourquoi elle existe, et la formule qu'elle applique.
+% Compilation : pdflatex specifications_fonctions.tex (deux fois)
+% =============================================================================
+\documentclass[10pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage{textcomp}
+\usepackage[utf8]{inputenc}
+\IfFileExists{french.ldf}{\usepackage[french]{babel}}{%
+  \renewcommand{\tablename}{Tableau}\renewcommand{\figurename}{Figure}
+  \renewcommand{\contentsname}{Table des matières}}
+\IfFileExists{lmodern.sty}{\usepackage{lmodern}}{\usepackage{mathptmx}}
+\usepackage[margin=2.1cm,headheight=14pt]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{siunitx}
+\sisetup{group-separator={\,},output-decimal-marker={,}}
+\usepackage{xcolor}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{microtype}
+\usepackage[hidelinks]{hyperref}
+
+\definecolor{bleufonce}{HTML}{1F3864}
+\definecolor{gris}{HTML}{595959}
+\titleformat{\section}{\color{bleufonce}\large\bfseries}{\thesection}{0.7em}{}
+\titleformat{\subsection}{\color{bleufonce}\normalsize\bfseries}{\thesubsection}{0.6em}{}
+\pagestyle{fancy}\fancyhf{}
+\fancyhead[L]{\small\color{bleufonce}Spécifications fonctionnelles — projet SCR}
+\fancyhead[R]{\small\color{bleufonce}\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{3pt}
+
+% \fn{signature}{pourquoi cette fonction}
+\newcommand{\fn}[2]{\par\smallskip\textcolor{bleufonce}{\texttt{#1}}\\ #2\par}
+\newcommand{\art}[1]{\textcolor{gris}{\small (art.~#1)}}
+
+\begin{document}
+
+\begin{titlepage}
+\centering
+\vspace*{3.5cm}
+{\color{bleufonce}\Huge\bfseries Spécifications fonctionnelles\par}
+\vspace{0.7cm}
+{\LARGE Pourquoi chaque fonction existe,\\[4pt] et quelle formule elle applique\par}
+\vspace{2.5cm}
+\begin{minipage}{0.8\linewidth}\small
+Ce document parcourt les 20 fichiers Python du projet et, pour chaque fonction, répond à deux
+questions : à quoi sert-elle dans la chaîne de calcul, et quelle est la formule sous-jacente
+lorsqu'elle en applique une. Les références d'articles renvoient au règlement délégué (UE)
+2015/35, sauf mention contraire.
+\end{minipage}
+\vfill
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% =============================================================================
+\section{Conventions de lecture}
+
+Chaque entrée donne la signature de la fonction, la raison de son existence, puis la formule
+quand il y en a une. Les fonctions dont le nom commence par un tiret bas sont internes : elles
+n'ont de sens qu'appelées depuis leur module.
+
+Notations communes : $s_t$ taux zéro-coupon de maturité $t$, $v(t) = (1+s_t)^{-t}$ facteur
+d'actualisation, $f_t$ taux forward à un an, $q_x$ probabilité de décès à l'âge $x$,
+$\mathrm{BE}$ best estimate, $\mathrm{FPB}$ fonds propres de base, $D_m$ duration modifiée.
+
+% =============================================================================
+\section{Package \texttt{scr\_data} — fabrication des données}
+
+\subsection{\texttt{config.py} — hypothèses et aléa}
+
+\fn{charger\_hypotheses(chemin)}{Point d'entrée unique vers le fichier d'hypothèses. Centraliser
+la lecture évite que chaque module relise le YAML avec ses propres conventions.}
+
+\fn{\_verifier(hyp)}{Refuse une configuration incohérente avant tout calcul. Trois contraintes
+de sommation, qui sont les erreurs de saisie les plus fréquentes :
+$\sum_c w_c = 1$ pour l'allocation, $\sum_q p_q = 1$ pour les répartitions par échelon de crédit,
+$\sum_{\text{pays}} w = 1$ pour les souverains.}
+
+\fn{date\_evaluation(hyp)}{Convertit la date en objet manipulable ; sert notamment à déterminer
+la génération de référence des tables de mortalité.}
+
+\fn{generateur(hyp, decalage)}{Donne un générateur aléatoire par module, de graine
+$\text{graine} + \text{decalage}$. L'objectif est l'indépendance des blocs : modifier le passif
+ne doit pas déplacer les tirages de l'actif, sans quoi aucune comparaison avant/après n'est
+lisible.}
+
+\fn{poids\_normalises(n, rng, sigma)}{Répartit un montant sur $n$ lignes de tailles
+hétérogènes mais réalistes, par tirage log-normal normalisé :
+$w_i = e^{\sigma Z_i} / \sum_j e^{\sigma Z_j}$, avec $Z_i \sim \mathcal{N}(0,1)$.}
+
+\subsection{\texttt{courbe.py} — courbe des taux sans risque}
+
+\fn{\_wilson(t, u, alpha, omega)}{Noyau de la méthode Smith-Wilson, brique de l'interpolation et
+de l'extrapolation réglementaires :
+\[
+W(t,u) = e^{-\omega(t+u)}\Bigl[\alpha\min(t,u) - \tfrac12 e^{-\alpha\max(t,u)}
+\bigl(e^{\alpha\min(t,u)} - e^{-\alpha\min(t,u)}\bigr)\Bigr].
+\]}
+
+\fn{SmithWilson.\_\_init\_\_(maturites, taux\_pair, ufr, alpha)}{Calibre la courbe sur des swaps
+au pair, c'est-à-dire des instruments cotés à 100. Résout le système linéaire
+$(C W C^{\top})\,\zeta = p - C\mu$ avec $\mu_t = e^{-\omega t}$, $C$ la matrice des flux et
+$p = \mathbf{1}$.}
+
+\fn{SmithWilson.facteur\_actualisation(t)}{Donne le prix zéro-coupon à toute maturité, entière ou
+non : $P(t) = e^{-\omega t} + \sum_j \zeta_j W(t,u_j)$.}
+
+\fn{SmithWilson.forward\_instantane(t, h)}{Nécessaire au critère de convergence réglementaire.
+Différence finie centrée : $f(t) \simeq -\bigl(\ln P(t+h) - \ln P(t-h)\bigr)/2h$.}
+
+\fn{calibrer\_alpha(...)}{Reproduit la règle EIOPA : retenir le plus petit $\alpha \ge 0{,}05$
+tel que $|f(\mathrm{CP}) - \ln(1+\mathrm{UFR})| \le 1$~pb. Un $\alpha$ trop grand déformerait la
+partie liquide, un $\alpha$ trop petit ne convergerait pas.}
+
+\fn{courbe\_smith\_wilson(hyp\_courbe)}{Chaîne complète à partir de taux swap : retrait de
+l'ajustement pour risque de crédit ($s \rightarrow s - \mathrm{CRA}$), calibrage, puis
+tabulation. Sert de repli quand le fichier officiel n'est pas disponible.}
+
+\fn{courbe\_eiopa(hyp\_courbe)}{Lit la courbe publiée par l'EIOPA. Repère la cellule portant le
+nom de la devise, puis la première série de 150 valeurs numériques consécutives : ce repérage
+par contenu résiste aux changements de mise en page du classeur.}
+
+\fn{\_mettre\_en\_forme(t, df)}{Reconstruit les représentations utiles à partir des seuls
+facteurs d'actualisation : $s_t = P(t)^{-1/t} - 1$ et $f_t = P(t-1)/P(t) - 1$.}
+
+\fn{construire\_courbe(hyp)}{Aiguillage entre les deux sources, pour que tout le reste du code
+ignore d'où vient la courbe.}
+
+\fn{Actualisation.df(t, spread)}{Actualisation à maturité quelconque, y compris non entière
+(flux de milieu d'année). Interpolation \emph{logarithmique}, qui garantit des facteurs positifs
+et des forwards réguliers :
+$\ln P(t) = \text{interp}\bigl(t,\, \ln P\bigr)$, puis
+$P(t,\sigma) = (1+s_t+\sigma)^{-t}$ en présence d'un spread.}
+
+\subsection{\texttt{mortalite.py} — tables de mortalité}
+
+\fn{TableMortalite.\_\_init\_\_(qx, nom)}{Encapsule un vecteur $q_x$ borné à $[0,1]$ avec
+$q_{120}=1$, pour que toute projection se termine.}
+
+\fn{TableMortalite.makeham(A, B, c)}{Table paramétrique de repli, utile pour travailler sans
+fichier réglementaire :
+$q_x = 1 - \exp\bigl(-A - B c^{x}(c-1)/\ln c\bigr)$.}
+
+\fn{TableMortalite.depuis\_csv(chemin)}{Charge une table réglementaire au format \texttt{age,qx}.}
+
+\fn{TableMortalite.ajuster(facteur)}{Matérialise les chocs de mortalité et de longévité : la
+table choquée est $q_x^{\text{choc}} = \lambda\, q_x$, avec $\lambda = 1{,}15$ ou $0{,}80$.}
+
+\fn{TableMortalite.survie(age, n)}{Brique de toute valorisation viagère :
+$\,_k p_x = \prod_{j=0}^{k-1}(1 - q_{x+j})$.}
+
+\fn{TableMortalite.annuite\_viagere(age, actu, terme\_echu, duree\_max)}{Valeur actuelle probable
+d'une rente unitaire, à terme échu ou à terme à échoir :
+\[
+a_x = \sum_{k\ge 1} {}_k p_x\, v(k), \qquad
+\ddot a_x = \sum_{k\ge 0} {}_k p_x\, v(k).
+\]}
+
+\fn{TableGenerationnelle.\_\_init\_\_(colonnes, annee\_reference, nom, facteur)}{Les tables TGH05
+et TGF05 sont bidimensionnelles : une personne d'âge $x$ à la date $Y$ relève de la génération
+$Y - x$. Cette classe évite l'erreur classique qui consiste à écraser la dimension
+générationnelle, laquelle sous-estimerait la longévité. L'attribut \texttt{qx} conserve la
+diagonale $q_x^{\text{diag}} = q(Y-x,\,x)$ pour les traitements à une dimension.}
+
+\fn{TableGenerationnelle.depuis\_csv\_long(chemin, annee, nom)}{Lit le format
+\texttt{generation,age,qx} produit par le script d'extraction.}
+
+\fn{TableGenerationnelle.\_colonne(generation)}{Renvoie la colonne demandée, ou la génération
+disponible la plus proche : les tables ne couvrent pas toutes les générations.}
+
+\fn{TableGenerationnelle.survie(age, n)}{Survie le long de la génération :
+$\,_k p_x = \prod_{j<k}\bigl(1 - \lambda\, q(Y-x,\; x+j)\bigr)$.}
+
+\fn{charger\_tables(hyp)}{Assemble le jeu de quatre tables (décès hommes et femmes, rentes
+hommes et femmes) selon la source configurée.}
+
+\fn{\_charger\_rente(chemin, annee, nom)}{Détecte le format : la présence d'une colonne
+\texttt{generation} déclenche le traitement générationnel.}
+
+\subsection{\texttt{actifs.py} — inventaire ligne à ligne}
+
+\fn{prix\_obligation(actu, coupon, maturite, spread)}{Valorisation de référence, utilisée à la
+génération comme sous choc :
+\[
+P = 100\Bigl(c\sum_{t=1}^{n} v(t,\sigma) + v(n,\sigma)\Bigr),
+\qquad v(t,\sigma) = (1+s_t+\sigma)^{-t}.
+\]}
+
+\fn{duration\_effective(actu, coupon, maturite, spread, choc)}{Mesure la sensibilité sur la
+courbe réelle plutôt que par une formule fermée, ce qui reste valable même si la courbe n'est pas
+plate :
+\[
+D_m = \frac{P(\sigma - \varepsilon) - P(\sigma + \varepsilon)}{2\,P(\sigma)\,\varepsilon},
+\qquad \varepsilon = 1~\text{pb}.
+\]}
+
+\fn{\_tirer\_maturites(rng, n, moyenne, mmin, mmax)}{Produit un profil d'échéances dispersé mais
+centré : $M \sim \Gamma(2,\ \text{moyenne}/2)$, puis arrondi supérieur et troncature dans
+$[\text{mmin}, \text{mmax}]$.}
+
+\fn{\_coupon(rng, actu, maturite, spread, ecart)}{Donne des titres au-dessus et en dessous du
+pair, donc des plus et moins-values latentes réalistes :
+$c = s_n + \sigma + \mathcal{N}(-0{,}4\,\%,\ \text{ecart})$, arrondi au huitième de point.}
+
+\fn{\_lignes\_obligataires(rng, actu, specs, montant\_cible, hyp\_obl)}{Valorise une liste de
+titres puis met les nominaux à l'échelle pour atteindre la valeur de marché visée :
+$N_i = w_i\, \text{cible} \times 100 / P_i$.}
+
+\fn{\_souverains, \_corporates, \_actions, \_immobilier, \_monetaire, \_prets\_infra}{Un
+générateur par poche, parce que chaque poche porte des attributs différents et alimente des
+sous-modules différents : échelon et duration pour le spread, type d'action pour le choc action,
+devise pour le change, groupe d'émetteurs pour la concentration.}
+
+\fn{\_uc\_transparence(rng, actu, hyp, montant)}{Met les supports en unités de compte en
+transparence. Sans cela, le risque porté par ces actifs serait invisible, alors que la
+réglementation impose de regarder au travers des OPC.}
+
+\fn{generer\_inventaire(hyp, actu)}{Assemble les poches, complète les colonnes manquantes et
+attribue les identifiants. C'est la seule fonction publique du module.}
+
+\subsection{\texttt{passif\_vie.py} — model points}
+
+\fn{\_ages, \_sexes}{Tirages démographiques tronqués, pour éviter les âges aberrants qui
+casseraient les projections.}
+
+\fn{\_taux\_par\_tranche(anciennete, tranches, cle)}{Applique un barème par tranche
+d'ancienneté. Sert aux taux minimums garantis par génération de contrat et aux rachats
+structurels, dont le pic fiscal à huit ans.}
+
+\fn{epargne\_euro(hyp, rng)}{Construit le portefeuille central du modèle. Chaque model point
+porte ce dont la projection a besoin : PM, taux garanti, chargement, taux de rachat, âge.}
+
+\fn{epargne\_uc(hyp, rng)}{Même logique pour les unités de compte, avec les versements cumulés
+nécessaires à une éventuelle garantie plancher.}
+
+\fn{temporaire\_deces(hyp, tables, rng)}{Tarifie puis met à l'échelle, de sorte que le volume de
+primes corresponde au plan : $\pi = q_x \times C \times (1+\text{chargement})$, puis
+$C \rightarrow C \times \Pi_{\text{cible}} / \sum \pi$.}
+
+\fn{\_annuite\_reversion(t\_princ, t\_conj, age\_x, age\_y, actu)}{Valorise la réversion, versée
+au conjoint après le décès du rentier, sous hypothèse d'indépendance des durées de vie :
+\[
+a_{\text{rev}} = \sum_{k\ge1} v(k)\ {}_k p_y \bigl(1 - {}_k p_x\bigr).
+\]}
+
+\fn{rentes\_viageres(hyp, tables, actu, rng)}{Calibre les arrérages pour atteindre le best
+estimate cible : $R_i = \tilde w_i \times \mathrm{BE}_{\text{cible}} / \sum_j \tilde w_j a_j$.
+Cette inversion garantit que le bilan reste cohérent quelle que soit la table utilisée.}
+
+\fn{generer\_passif\_vie(hyp, tables, actu)}{Assemble les quatre tables de model points.}
+
+\subsection{\texttt{non\_vie\_sante.py} — triangles et santé SLT}
+
+\fn{\_parts\_cumulees(cadence, facteur\_queue)}{Traduit une cadence de règlement en parts
+cumulées de l'ultime, en réservant la queue :
+$\pi_j = c_j / (c_{n-1} \times f_{\text{queue}})$.}
+
+\fn{reserve\_theorique(p, ...)}{Calcule la réserve attendue avant aléa,
+$\sum_i P_i \times \mathrm{S/P} \times (1 - \pi_{n-1-i})$, ce qui permet de caler les paramètres
+avant toute simulation.}
+
+\fn{simuler\_triangle(nom, p, ...)}{Produit un triangle réaliste \emph{et} les ultimes réels, ce
+qui permet de mesurer l'erreur des méthodes de provisionnement — impossible sur données réelles.
+Ultime bruité en log-normal, incréments bruités en gamma :
+\[
+U_i = P_i\,\mathrm{S/P}\,\kappa\,e^{\mathcal{N}(-\frac{\varsigma^2}{2}, \varsigma^2)},
+\qquad
+X_{i,j} = U_i (\pi_j - \pi_{j-1})\, G, \quad G \sim \Gamma(k, 1/k),\ k = 1/\mathrm{CV}^2.
+\]}
+
+\fn{triangle\_en\_matrice(tri\_long)}{Bascule du format long au format matriciel attendu par
+Chain Ladder et par l'export.}
+
+\fn{generer\_non\_vie(hyp)}{Boucle sur les lignes d'activité et assemble triangles, ultimes,
+volumes et expositions.}
+
+\fn{\_volume(...)}{Prépare les volumes du sous-module primes et réserves : $P_{\text{last}}$,
+$P_{\text{next}}$, primes futures, taux de cession.}
+
+\fn{\_expositions\_cat(hyp, rng)}{Répartit les capitaux assurés par zone selon une loi de
+Dirichlet, ce qui crée une concentration géographique réaliste, et rassemble les autres
+expositions catastrophe.}
+
+\fn{generer\_sante\_slt(hyp, tables, actu)}{Rentes d'incapacité et d'invalidité en cours de
+service, avec deux lois de maintien distinctes : mortalité aggravée jusqu'à la fin de garantie
+pour l'invalidité, maintien exponentiel $e^{-\lambda t}$ pour l'incapacité. Les rentes sont
+ensuite calées sur le best estimate cible.}
+
+\subsection{\texttt{bilan.py} et \texttt{export.py}}
+
+\fn{generer\_contreparties(hyp)}{Construit les expositions de type 1 et 2, seule entrée du module
+de défaut.}
+
+\fn{construire\_bilan(...)}{Présente le bilan au format proche du S.02.01 et, surtout, marque
+chaque poste par son statut : issu de l'inventaire, hypothèse, indicatif ou cible à recalculer.
+Sans ce marquage, on oublie vite ce qui est calculé et ce qui est posé.}
+
+\fn{controles(...)}{Vingt et un contrôles de calibrage. Leur rôle est d'échouer tôt : un écart
+d'allocation ou un calage de triangle aberrant se voit immédiatement, avant toute interprétation
+des SCR.}
+
+\fn{exporter\_csv, \_entete, \_style, \_titre, exporter\_excel}{Restitution. Les totaux du
+classeur sont écrits en formules Excel et non en valeurs, pour qu'un lecteur puisse modifier une
+ligne et voir le total suivre.}
+
+% =============================================================================
+\section{\texttt{generer\_donnees.py}}
+
+\fn{generer(chemin\_config, ecrire)}{Orchestre la fabrication complète des données et garantit
+l'ordre des dépendances : courbe, puis tables, puis actifs, puis passifs.}
+
+\fn{\_resume(...)}{Affiche les masses, les fonds propres et le décompte des contrôles, en
+remontant les avertissements de calage capturés pendant la génération.}
+
+% =============================================================================
+\section{Package \texttt{scr} — moteur de calcul}
+
+\subsection{\texttt{passif.py} — best estimate déterministe}
+
+\fn{Chocs}{Dataclass gelée portant tous les chocs de passif. Gelée pour deux raisons : elle est
+comparable par égalité, ce qui permet au module marché de détecter qu'un choc ne touche que les
+unités de compte et d'emprunter un raccourci de calcul ; et elle ne peut pas être modifiée par
+inadvertance au milieu d'une projection.}
+
+\fn{\_qx\_projete(table, age, horizon, chocs)}{Trajectoire de mortalité sous choc :
+$q^{\text{choc}}_{x+k} = \lambda q_{x+k}$, et $q^{\text{choc}}_x = q_x + 0{,}0015$ la première
+année pour le choc catastrophe \art{144}.}
+
+\fn{\_frais\_unitaires(base, hyp, chocs, horizon)}{Frais inflatés, avec le point d'inflation
+supplémentaire du choc de frais \art{143} : $g_k = g_0 (1+\lambda_f)(1+i+\Delta i)^k$.}
+
+\fn{be\_epargne\_euro(mp, actu, courbe, tables, hyp, chocs, par\_model\_point)}{Cœur du passif
+vie. Projection annuelle par model point :
+\begin{align*}
+r_k &= \max\bigl(\mathrm{TMG} + \text{chargement},\ \alpha f_k\bigr) - \text{chargement}\\
+\mathrm{PM}_{k+1} &= \mathrm{PM}_k(1+r_k)\bigl(1 - q_k - \ell_k + q_k \ell_k\bigr)\\
+\mathrm{BE} &= \sum_k v(k)\Bigl[\mathrm{PM}_k(1+r_k)(q_k + \ell_k - q_k\ell_k) + g_k \mathrm{PM}_k\Bigr]
+\end{align*}
+L'option \texttt{par\_model\_point} renvoie le détail contrat par contrat, indispensable au
+rachat massif sélectif.}
+
+\fn{be\_epargne\_uc(...)}{Même structure, mais la provision croît au forward diminué des
+prélèvements, ce qui fait ressortir naturellement $\mathrm{BE} < \mathrm{PM}$ : la différence est
+la valeur actuelle des chargements futurs.}
+
+\fn{be\_temporaire\_deces(mp, actu, tables, hyp, chocs)}{Garantie décès, nette des primes
+futures — d'où un best estimate parfois négatif :
+\[
+\mathrm{BE} = \sum_k {}_k p^{(\tau)}_x q_{x+k} C\, v(k+\tfrac12)
++ \gamma \sum_k {}_k p^{(\tau)}_x \pi\, v(k) - \sum_k {}_k p^{(\tau)}_x \pi\, v(k),
+\]
+le décrément $\,_k p^{(\tau)}$ combinant décès et chute.}
+
+\fn{be\_rentes(mp, actu, tables, hyp, chocs)}{Valorise les rentes en service, réversion comprise :
+$\mathrm{BE} = \sum_i R_i (1+\varphi)\bigl[\ddot a_{x_i} + \tau\, a_{\text{rev}}\bigr]$.}
+
+\fn{be\_sante\_slt(mp, actu, tables, hyp, chocs)}{Rentes d'incapacité et d'invalidité, avec les
+deux lois de maintien correspondantes et le choc de révision \art{158}.}
+
+\fn{chain\_ladder(triangle)}{Méthode de provisionnement de référence :
+\[
+\hat f_j = \frac{\sum_{i \le n-j-1} C_{i,j+1}}{\sum_{i \le n-j-1} C_{i,j}},
+\qquad
+\hat C_{i,n} = C_{i,n-i}\prod_{j \ge n-i} \hat f_j,
+\qquad
+\hat R_i = \hat C_{i,n} - C_{i,n-i}.
+\]}
+
+\fn{cadence\_reglement(facteurs)}{Déduit la cadence de règlement des facteurs de développement,
+pour pouvoir actualiser : $\pi_j = \prod_{k<j} \hat f_k / \prod_{k} \hat f_k$.}
+
+\fn{be\_non\_vie(donnees, actu, hyp, chocs, modules)}{Transforme des réserves comptables en best
+estimate, c'est-à-dire actualisées et majorées des frais de gestion :
+\[
+\mathrm{BE}_{\text{sin}} = (1+\gamma)\sum_i \hat R_i \sum_j \frac{\pi_{j+1}-\pi_j}{1-\pi_{\text{dev}(i)}}\,
+v\bigl(j+\tfrac12\bigr),
+\qquad
+\mathrm{BE}_{\text{prim}} = \text{exposition} \times \mathrm{CR} \times v(1).
+\]}
+
+\fn{Passifs.evaluer(actu, courbe, chocs)}{Interface unique du passif : tous les modules de risque
+passent par elle, ce qui garantit que le même jeu d'hypothèses est appliqué partout.}
+
+\subsection{\texttt{marche.py} — risque de marché}
+
+\fn{\_facteurs\_officiels(chemin)}{Lit l'onglet des chocs du fichier EIOPA, avec mise en cache :
+les facteurs sont relus à chaque évaluation de sous-module.}
+
+\fn{facteurs\_choc\_taux(params, sens, maturites)}{Fournit $f^{\uparrow}_t$ et $f^{\downarrow}_t$,
+soit depuis le fichier officiel, soit depuis les tables du paramétrage, avec interpolation
+linéaire entre les points tabulés.}
+
+\fn{courbe\_choquee(courbe, params, sens)}{Applique la règle des articles 166 et 167, exactement
+comme le classeur EIOPA :
+\[
+s^{\uparrow}_t = s_t + \max\bigl(1\,\%,\ f^{\uparrow}_t |s_t|\bigr),
+\qquad
+s^{\downarrow}_t = \begin{cases} s_t & s_t < 0\\ s_t - f^{\downarrow}_t |s_t| & \text{sinon.}\end{cases}
+\]}
+
+\fn{revaloriser\_obligations(inv, actu)}{Reprix chaque titre sous une courbe donnée, en
+conservant coupon, maturité et spread. C'est ce qui rend le choc de taux exact plutôt
+qu'approché par la duration.}
+
+\fn{facteur\_stress\_spread(cqs, duration, params, covered)}{Table de l'article 176, avec
+plancher de duration à un an et traitement réduit des obligations sécurisées :
+$\mathrm{stress} = \min\bigl(a_{q,k} + b_{q,k}(d - \underline d_k),\ 1\bigr)$.}
+
+\fn{matrice\_marche(matrice, a, b)}{Substitue les symboles de la matrice : $A$ pour le couple
+taux–action–immobilier, $B$ pour le couple taux–spread du régime 2027. Écrire la matrice avec
+des symboles évite de la dupliquer pour chaque scénario.}
+
+\fn{MoteurMarche.\_\_init\_\_(...)}{Mémorise l'état de référence — best estimate et fonds propres
+avant choc — puisque chaque sous-module se mesure par rapport à lui.}
+
+\fn{MoteurMarche.\_bof(valeurs, courbe, chocs)}{Recalcule les fonds propres de base sous un jeu
+de valeurs d'actif : $\mathrm{FPB} = \sum_i \mathrm{VM}_i + A_{\text{hors inventaire}}
+- \mathrm{BE} - \text{autres passifs}$. Contient un raccourci : si seule la valeur des unités de
+compte bouge, seul leur best estimate est reprojeté, ce qui divise le temps de calcul.}
+
+\fn{MoteurMarche.\_perte(...)}{Traduit la variation en SCR : $\max(0, \mathrm{FPB}_0 -
+\mathrm{FPB}_{\text{choc}})$. Le plancher à zéro interdit qu'un choc favorable réduise le
+capital requis.}
+
+\fn{MoteurMarche.\_facteur\_uc(valeurs)}{Transmet au passif la variation de valeur des supports
+en unités de compte : le porteur supporte le risque, donc la provision suit l'actif.}
+
+\fn{MoteurMarche.taux()}{Évalue les deux scénarios et retient le pire, en mémorisant lequel :
+le choix détermine ensuite le paramètre de corrélation $A$.}
+
+\fn{MoteurMarche.action()}{Chocs par catégorie \art{168 à 172} puis agrégation :
+$\sqrt{\mathrm{SCR}_1^2 + 2\rho\,\mathrm{SCR}_1\mathrm{SCR}_2 + \mathrm{SCR}_2^2}$,
+$\rho = 0{,}75$.}
+
+\fn{MoteurMarche.immobilier()}{Choc uniforme de \qty{25}{\percent} \art{174}, immeubles
+d'exploitation compris.}
+
+\fn{MoteurMarche.spread()}{Applique le stress ligne à ligne, en excluant les souverains de
+l'Espace économique européen et en réduisant l'infrastructure qualifiante.}
+
+\fn{MoteurMarche.change()}{Teste $\pm\qty{25}{\percent}$ par devise \art{188} et retient le pire
+sens, devise par devise.}
+
+\fn{MoteurMarche.concentration()}{Ne sanctionne que l'excès au-delà d'un seuil \art{184} :
+\[
+\mathrm{XS}_i = \max\Bigl(0, \frac{E_i}{A}-\mathrm{CT}_q\Bigr),\quad
+\mathrm{Conc}_i = A\,\mathrm{XS}_i\,g_q,\quad
+\mathrm{SCR} = \sqrt{\textstyle\sum_i \mathrm{Conc}_i^2}.
+\]}
+
+\fn{MoteurMarche.calculer()}{Agrège les six sous-modules avec le paramètre $A$ cohérent avec le
+scénario de taux retenu.}
+
+\subsection{\texttt{contrepartie.py}}
+
+\fn{\_pd\_exposition(cqs, params)}{Traduit un échelon de qualité de crédit en probabilité de
+défaut, avec repli pour les expositions non notées.}
+
+\fn{scr\_type1(expositions, params)}{Formule de variance de l'article 200, qui distingue le
+risque systématique du risque idiosyncrasique :
+\[
+V = \sum_{j,k}\frac{\mathrm{PD}_j\mathrm{PD}_k}{1{,}25(\mathrm{PD}_j+\mathrm{PD}_k)-\mathrm{PD}_j\mathrm{PD}_k}
+\mathrm{TLGD}_j\mathrm{TLGD}_k
++ \sum_j \frac{1{,}5\,\mathrm{PD}_j(1-\mathrm{PD}_j)}{2{,}5-\mathrm{PD}_j}\sum_{i\in j}\mathrm{LGD}_i^2,
+\]
+puis règle à trois branches : $3\sqrt V$, $5\sqrt V$ ou $\sum \mathrm{LGD}$ selon la
+concentration.}
+
+\fn{scr\_type2(contreparties, params)}{Traitement forfaitaire des créances :
+$15\,\% \times$ non échues $+\ 90\,\% \times$ échues depuis plus de trois mois.}
+
+\fn{calculer(contreparties, params)}{Construit les pertes en cas de défaut — \qty{50}{\percent}
+pour la réassurance, \qty{100}{\percent} pour la trésorerie — et agrège :
+$\sqrt{\mathrm{SCR}_1^2 + 1{,}5\,\mathrm{SCR}_1\mathrm{SCR}_2 + \mathrm{SCR}_2^2}$.}
+
+\subsection{\texttt{souscription.py} — vie et santé}
+
+\fn{agreger(scr, correlations)}{Forme quadratique commune à tous les modules :
+$\sqrt{\mathbf v^{\top}\mathbf C \mathbf v}$. Une seule implémentation, donc une seule occasion
+de se tromper.}
+
+\fn{MoteurVie.\_evaluer(chocs) / \_evaluer\_mp(chocs)}{Best estimate des quatre segments vie,
+globalement ou par model point.}
+
+\fn{MoteurVie.\_perte(chocs, segments)}{Retient la hausse de provisions \emph{segment par
+segment} : $\sum_s \max(0, \mathrm{BE}^{\text{choc}}_s - \mathrm{BE}_s)$. Un segment où le choc
+est favorable ne vient pas compenser, conformément à l'esprit du texte.}
+
+\fn{MoteurVie.mortalite() / longevite()}{Chocs permanents $\times 1{,}15$ \art{137} et
+$\times 0{,}80$ \art{138}.}
+
+\fn{MoteurVie.rachat()}{Trois variantes — hausse, baisse, rachat massif — dont la pire est
+retenue \art{142}.}
+
+\fn{MoteurVie.\_rachat\_massif()}{Applique le rachat de \qty{40}{\percent} \emph{contrat par
+contrat}, en ne retenant que ceux dont le rachat accroît le best estimate :
+$\sum_i \max(0, \mathrm{BE}^{\text{massif}}_i - \mathrm{BE}_i)$. Une application globale
+sous-estimerait le choc.}
+
+\fn{MoteurVie.frais() / revision() / catastrophe()}{$+\qty{10}{\percent}$ de frais et un point
+d'inflation \art{143} ; révision des rentes \art{141} ; surmortalité de \num{0.15} point la
+première année \art{144}.}
+
+\fn{MoteurSante.slt()}{Transpose la logique vie aux rentes en service, en remplaçant le rachat
+par le risque d'invalidité : les taux de sortie d'incapacité sont réduits de \qty{20}{\percent}.}
+
+\fn{MoteurSante.nslt()}{Applique la formule primes et réserves à la ligne frais de soins :
+\[
+\sigma_s = \frac{\sqrt{(\sigma_p V_p)^2 + \sigma_p V_p \sigma_r V_r + (\sigma_r V_r)^2}}{V_p+V_r},
+\qquad \mathrm{SCR} = 3\,\sigma_s V_s.
+\]}
+
+\fn{MoteurSante.catastrophe()}{Version paramétrique simplifiée des articles 160 à 163 : accident
+de masse, concentration d'accident et pandémie, agrégés quadratiquement. Assumée comme
+provisoire, elle isole le chantier restant.}
+
+\subsection{\texttt{non\_vie.py}}
+
+\fn{MoteurNonVie.primes\_reserves()}{Écart type par ligne puis agrégation par la matrice de
+l'annexe IV :
+\[
+\sigma = \frac{\sqrt{\sum_{s,t}\mathrm{Corr}_{s,t}\,\sigma_s V_s \sigma_t V_t}}{V},
+\qquad \mathrm{SCR} = 3\,\sigma\,V .
+\]
+Le facteur 3 est l'approximation log-normale du quantile à \qty{99.5}{\percent}.}
+
+\fn{MoteurNonVie.rachat()}{Ne charge du capital que si la provision pour primes est bénéficiaire :
+$\qty{40}{\percent} \times \max(0, \text{exposition} - \mathrm{BE}_{\text{primes}})$.}
+
+\fn{MoteurNonVie.catastrophe()}{Agrège périls naturels et scénarios d'origine humaine, puis
+applique la réassurance.}
+
+\fn{MoteurNonVie.\_appliquer\_xl(brut)}{Traité en excédent de sinistres :
+$L^{\text{net}} = \min(L, \text{priorité}) + \max(0, L - \text{priorité} - \text{portée})$.
+Appliqué avant agrégation, sinon l'effet sur la queue serait mal capté.}
+
+\subsection{\texttt{agregation.py}}
+
+\fn{bscr(scr\_modules, params)}{Agrégation des cinq modules \art{87} :
+$\mathrm{BSCR} = \sqrt{\sum_{i,j}\mathrm{Corr}_{i,j}\mathrm{SCR}_i\mathrm{SCR}_j}$.}
+
+\fn{operationnel(hyp, be, bscr, params, donnees)}{Formule forfaitaire \art{204} :
+\[
+\mathrm{SCR}_{\text{op}} = \min\bigl(0{,}3\,\mathrm{BSCR},\
+\max(\mathrm{Op}_{\text{prim}}, \mathrm{Op}_{\text{prov}})\bigr) + 0{,}25\,\mathrm{Dép}_{\text{UC}} .
+\]}
+
+\fn{ajustements(bscr, scr\_op, hyp, params)}{Calcule les deux ajustements. La capacité fiscale
+est plafonnée deux fois : par le taux d'impôt appliqué au choc, et par la capacité réellement
+justifiable \art{207}.}
+
+\fn{mcr(scr, be, donnees, hyp, params, detail\_non\_vie)}{Calcul linéaire puis encadrement
+\art{248 à 253} :
+$\mathrm{MCR} = \max\bigl\{\min(\max(\mathrm{MCR}_{\text{lin}}, 0{,}25\,\mathrm{SCR}),
+0{,}45\,\mathrm{SCR}),\ \mathrm{AMCR}\bigr\}$.}
+
+\fn{tableau\_s25(...)}{Restitue le résultat au format réglementaire, la diversification étant
+présentée comme l'écart entre le BSCR et la somme des modules.}
+
+\subsection{\texttt{esg.py} — générateur de scénarios}
+
+\fn{HullWhite.\_\_init\_\_(courbe, a, sigma)}{Extrait le forward instantané initial, condition
+nécessaire pour que le modèle reproduise exactement la courbe de marché.}
+
+\fn{HullWhite.alpha(t)}{Terme d'ajustement qui assure cette reproduction :
+$\alpha(t) = f(0,t) + \frac{\sigma^2}{2a^2}\bigl(1-e^{-at}\bigr)^2$.}
+
+\fn{HullWhite.prix\_zc(t, maturite, r)}{Structure affine du modèle :
+$P(t,T) = A(t,T)\,e^{-B(t,T)r_t}$ avec $B(t,T) = (1-e^{-a(T-t)})/a$. Donne le taux à dix ans
+conditionnel, dont le modèle ALM a besoin.}
+
+\fn{HullWhite.simuler(...)}{Schéma \emph{exact} à pas annuel, donc sans biais de discrétisation :
+\[
+r_{t+1} = r_t e^{-a} + \alpha(t+1) - \alpha(t)e^{-a}
++ \sigma\sqrt{\tfrac{1-e^{-2a}}{2a}}\ \varepsilon_{t+1}.
+\]}
+
+\fn{\_bruits\_correles(...)}{Corrèle les trois facteurs par décomposition de Cholesky et double
+les tirages en variables antithétiques, ce qui réduit la variance sans biais.}
+
+\fn{generer\_scenarios(courbe, hyp)}{Assemble taux, déflateurs et rendements risqués :
+$D_t = \exp(-\int_0^t r_u\,du)$ approché par la règle du trapèze, et
+$S_{t+1}/S_t = \exp\bigl(r_t - \frac{\sigma_S^2}{2} + \sigma_S \varepsilon\bigr)$.}
+
+\fn{scenario\_central(courbe, hyp)}{Scénario déterministe fondé sur les forwards. Sans lui, la
+valeur temps des options ne serait pas isolable.}
+
+\fn{tests\_martingale(sc)}{Contrôle de qualité indispensable : $\mathbb{E}[D_T] = P(0,T)$ et
+$\mathbb{E}[D_T S_T]/S_0 = 1$. Un générateur qui échoue ici produit des best estimate faux.}
+
+\subsection{\texttt{alm.py} — projection actif-passif}
+
+\fn{construire\_cohortes(mp, hyp, tables, horizon)}{Regroupe les model points par taux garanti et
+tranche d'âge. La vectorisation par cohortes est ce qui rend praticables des milliers de
+scénarios.}
+
+\fn{construire\_actif\_euro(inventaire, hyp)}{Agrège l'inventaire en quatre poches avec leurs
+plus-values latentes, leur rendement courant et leur duration.}
+
+\fn{\_taux\_rachat\_conjoncturel(ecart, lois)}{Loi ONC de l'ACPR, fonction affine par morceaux de
+l'écart entre taux servi et taux attendu, à mi-chemin des courbes plancher et plafond. C'est le
+mécanisme qui relie le comportement des assurés à l'environnement de taux.}
+
+\fn{ModeleALM.projeter(sc, regime, ...)}{Boucle annuelle vectorisée sur les scénarios. Points
+clés :
+\begin{itemize}
+\item rendement comptable renouvelé progressivement :
+      $y_{t+1} = y_t(1-1/M) + s^{10}_t / M$ ;
+\item réalisation de plus-values pour atteindre la cible :
+      $\text{réal} = \min(\theta\,\mathrm{PVL},\ \text{besoin})$ ;
+\item participation aux bénéfices, dotation et reprise obligatoire de la PPE sur huit ans ;
+\item best estimate $= \mathbb{E}\bigl[\sum_t D_t (\text{prestations}_t + \text{frais}_t)\bigr]$.
+\end{itemize}
+Les trois régimes — dynamique, figé, garanti — donnent respectivement le calcul net, le calcul
+brut et la part garantie, dont la différence mesure les prestations discrétionnaires futures.}
+
+\subsection{\texttt{reforme.py} — régime 2027}
+
+\fn{dernier\_forward\_liquide(courbe, fsp, poids)}{Calcule le LLFR, moyenne pondérée des forwards
+liquides au-delà du premier point de lissage. C'est le pivot de la nouvelle extrapolation.}
+
+\fn{extrapoler\_2027(courbe, params, ufr, decalage)}{Nouvelle méthode :
+\[
+f(h) = \mathrm{LLFR} + \bigl(\mathrm{UFR}^c - \mathrm{LLFR}\bigr)\frac{1-e^{-ah}}{ah},
+\]
+appliquée au-delà du premier point de lissage, avec UFR décalée sous choc.}
+
+\fn{courbe\_choquee\_2027(courbe, params, sens, ufr)}{Choc multiplicatif plus décalage parallèle,
+avec planchers négatifs par terme, puis ré-extrapolation :
+$s^{\uparrow}_t = s_t(1+b_t) + a_t$ et
+$s^{\downarrow}_t = \max\bigl(s_t(1-b_t) - a_t,\ \underline s_t\bigr)$.}
+
+\fn{params\_2027(params, reforme, etapes)}{Applique les modifications \emph{une à une}, sur une
+copie profonde. C'est ce qui rend possible le pont du ratio, étape par étape, et garantit que le
+paramétrage d'origine n'est jamais altéré.}
+
+\subsection{\texttt{marge\_risque.py}}
+
+\fn{profil\_run\_off(flux, actu)}{Décroissance des provisions restant à couvrir, normalisée à 1.
+Sert d'inducteur aux SCR futurs, conformément aux simplifications admises.}
+
+\fn{marge\_risque(scr\_initial, flux, actu, cout\_capital, lambda, plancher)}{Formule de la marge
+de risque, dans les deux régimes :
+\[
+\mathrm{MR} = \mathrm{CoC}\sum_{t\ge0}\frac{\max(\lambda^t, \underline\lambda)\ \mathrm{SCR}^{\text{nc}}(t)}
+{(1+s_{t+1})^{t+1}},
+\qquad \mathrm{SCR}^{\text{nc}}(t) = \mathrm{SCR}^{\text{nc}}(0)\frac{\mathrm{BE}(t)}{\mathrm{BE}(0)}.
+\]
+Le facteur $\lambda$ n'existe que dans le régime 2027.}
+
+\subsection{\texttt{modele\_interne.py}}
+
+\fn{bootstrap\_odp(triangle, nb\_simulations, rng, ajustement\_biais)}{Donne la distribution
+complète des réserves, là où Chain Ladder ne donne qu'une espérance. Résidus de Pearson corrigés
+du biais, puis bruit de processus gamma :
+\[
+r_{i,j} = \frac{X_{i,j} - \hat m_{i,j}}{\sqrt{\hat m_{i,j}}}\sqrt{\frac{N}{N-p}},
+\qquad
+\hat\phi = \frac{\sum r^2}{N-p},
+\qquad
+X^{*} \sim \Gamma\bigl(\hat m/\hat\phi,\ \hat\phi\bigr).
+\]}
+
+\fn{ajuster\_sp(triangle, primes)}{Estime la loi des sinistres à primes ultimes sur l'historique :
+$\mu, \varsigma$ des $\ln(\hat U_i / P_i)$.}
+
+\fn{simuler\_primes(mu, sigma, volume, n, rng, incertitude)}{Charge de l'année à venir,
+$L = V \exp\bigl(\mu + \varsigma(1+\eta)Z\bigr)$, la majoration $\eta$ représentant l'incertitude
+d'estimation sur dix observations seulement.}
+
+\fn{simuler\_catastrophe(params, n, rng, priorite, portee)}{Fréquence-sévérité au-delà d'un
+seuil, qui est la modélisation naturelle des extrêmes :
+$N \sim \mathcal{P}(\lambda)$ et
+$X = u + \frac{\beta}{\xi}\bigl((1-U)^{-\xi} - 1\bigr)$, avec application du traité par
+événement.}
+
+\fn{copule(matrice, n, rng, famille, ddl)}{Sépare les marginales de la structure de dépendance.
+La copule de Student, contrairement à la gaussienne, produit des chocs simultanés dans les
+queues : $U = t_\nu\bigl(Z\sqrt{\nu/W}\bigr)$, $W \sim \chi^2_\nu$.}
+
+\fn{coupler(marginales, uniformes)}{Relie des marginales simulées séparément par les quantiles
+empiriques : $X_k = F_k^{-1}(U_k)$. Les marginales peuvent avoir des tailles différentes.}
+
+\fn{mesures\_risque(pertes, quantile)}{Mesures de risque comparables :
+$\mathrm{SCR} = \mathrm{VaR}_{99{,}5\%}(L) - \mathbb{E}[L]$ et
+$\mathrm{TVaR} = \mathbb{E}[L \mid L \ge \mathrm{VaR}]$.}
+
+\fn{usp\_reserve(distribution, sigma\_standard, nb\_annees, credibilite)}{Paramètre propre à
+l'entreprise, mélangé au paramètre de marché par crédibilité :
+$\sigma^{\star} = c\,\sigma^{\mathrm{USP}} + (1-c)\sigma^{\text{std}}$, avec $c$ fonction de la
+profondeur d'historique.}
+
+\subsection{\texttt{orsa.py}}
+
+\fn{EtatBilan}{Porte l'état du bilan projeté et ses propriétés dérivées. Le fait que
+$\mathrm{FP} = A - P$ soit une propriété calculée, et non un champ, interdit les incohérences.}
+
+\fn{etat\_initial(be\_segments, hyp, inventaire)}{Construit le point de départ à partir du bilan
+V2 et de l'allocation réelle.}
+
+\fn{ProjectionORSA.scr\_initial()}{Contrôle de cohérence : reconstitue le SCR de départ avec les
+briques de la projection. Il a détecté un double comptage de l'absorption.}
+
+\fn{ProjectionORSA.\_modules\_projetes(...)}{Met les modules à l'échelle de leurs inducteurs de
+volume, plutôt que de recalculer un SCR complet chaque année : c'est la simplification usuelle en
+ORSA. Le module marché réagit en outre à la déformation de l'allocation, à hauteur de
+\qty{30}{\percent}.}
+
+\fn{ProjectionORSA.projeter(scenario)}{Boucle annuelle : environnement financier et chocs,
+activité, compte de résultat, bouclage du bilan. Le résultat s'écrit
+\[
+R = r\,A_{\text{début}} - \text{taux servi} \times \mathrm{BE}^{\text{euro}}_{\text{début}}
++ \text{marges} - \text{frais} - \text{sinistres},
+\]
+et les fonds propres évoluent de $R$ net d'impôt et de dividende, l'actif se déduisant du passif.
+Ce bouclage rend l'égalité comptable vraie par construction.}
+
+\fn{besoin\_global\_solvabilite(scr, hyp)}{Complète le SCR par les risques mal captés par la
+formule standard, avec abattement de diversification. C'est le cœur du message ORSA.}
+
+% =============================================================================
+\section{Scripts d'extraction}
+
+\fn{extraire\_tables\_mortalite.\_qx\_depuis\_lx(lx)}{Les classeurs officiels donnent des
+effectifs, les modèles ont besoin de probabilités : $q_x = 1 - l_{x+1}/l_x$.}
+
+\fn{extraire\_tables\_mortalite.extraire\_th\_tf(chemin)}{Isole les quatre tables du classeur TH
+et TF, y compris les variantes en cas de vie, souvent oubliées.}
+
+\fn{extraire\_tables\_mortalite.extraire\_generationnelle(chemin, onglet)}{Met les tables TGH05
+et TGF05 au format long \texttt{generation, age, qx}, seul format qui préserve la dimension
+générationnelle.}
+
+\fn{extraire\_tables\_mortalite.diagonale(table, annee)}{Produit une table à une dimension pour
+les outils qui n'en acceptent pas d'autre : $q^{\text{diag}}_x = q(Y-x,\ x)$.}
+
+\fn{extraire\_parametres\_eiopa.facteurs\_choc(chemin)}{Extrait les facteurs $f^{\uparrow}$ et
+$f^{\downarrow}$ officiels, ce qui supprime une saisie manuelle et donc une source d'erreur.}
+
+\fn{extraire\_parametres\_eiopa.parametres(chemin, devise)}{Récupère UFR, dernier point liquide,
+point de convergence, $\alpha$ et ajustement pour risque de crédit, qui documentent la
+construction de la courbe.}
+
+% =============================================================================
+\section{Scripts de calcul}
+
+\fn{calculer\_scr.charger\_donnees(dossier)}{Lit les tables et échoue avec un message explicite
+si la génération n'a pas été lancée.}
+
+\fn{calculer\_scr.calculer(ecrire, hyp, params, courbe)}{Enchaîne les modules jusqu'au S.25.01.
+Les trois arguments optionnels sont ce qui permet aux versions suivantes de rejouer le calcul
+avec d'autres hypothèses, sans dupliquer une ligne de code.}
+
+\fn{calculer\_v2.\_stress\_spread\_moyen(inventaire, params)}{Résume le choc de spread en une
+perte relative moyenne, transmissible au modèle ALM qui travaille sur des poches agrégées.}
+
+\fn{calculer\_v2.substituer(perte\_v1, choc, regime)}{Cœur de la V2 :
+\[
+\mathrm{perte}^{\mathrm{V2}} = \mathrm{perte}^{\mathrm{V1}}
+- \Delta\mathrm{BE}^{\text{déterministe}}_{\text{euro}}
++ \Delta\mathrm{BE}^{\text{stochastique}}_{\text{euro}} .
+\]
+Cette écriture remplace proprement le canton euro dans chaque sous-module, sans réécrire les
+modules eux-mêmes.}
+
+\fn{calculer\_v2.\_rachat\_massif\_selectif(...)}{Applique le rachat massif cohorte par cohorte,
+avec PPE allouée au prorata, pour préserver la sélection exigée par l'article 142.}
+
+\fn{calculer\_v2.\_sensibilite\_tmg(...)}{Mesure la valeur temps des options à quatre niveaux de
+taux garantis. C'est ce qui révèle sa forme en cloche.}
+
+\fn{calculer\_v3.scr\_non\_couvrable(resultat, params)}{Assiette correcte de la marge de risque :
+agrégation des modules en annulant le risque de marché, plus le risque opérationnel.}
+
+\fn{calculer\_v3.calculer()}{Rejoue la V2 à chaque étape du pont, en remplaçant courbe et
+paramètres selon l'ensemble cumulé des modifications.}
+
+\fn{calculer\_v3.\_sensibilites(...)}{Isole les deux paramètres les plus incertains : la part du
+décalage parallèle des chocs de taux, et le niveau de l'ajustement symétrique.}
+
+\fn{calculer\_v4.\_recalculer\_global(v2, scr\_non\_vie, hyp, params)}{Substitue le module
+non-vie dans l'agrégation et recalcule les ajustements, pour mesurer l'effet d'un modèle interne
+sur le ratio et non seulement sur un module.}
+
+\fn{calculer\_v4.\_marge\_cima(...)}{Calcule la marge de solvabilité du code CIMA sur le même
+bilan : $\max(20\,\%\,P,\ 25\,\%\,S)$ en non-vie, $5\,\%\,\mathrm{PM} + 0{,}3\,\%\,C$ en vie.
+La comparaison montre ce qu'un référentiel forfaitaire ne voit pas.}
+
+\fn{calculer\_v5.\_stress\_inverses(projection, hyp)}{Recherche par dichotomie l'amplitude de
+choc qui amène le ratio à la limite d'appétence. Le stress inversé répond à la question que pose
+un conseil d'administration : jusqu'où peut-on aller ?}
+
+\fn{calculer\_v5.\_synthese(...)}{Résume chaque scénario par son ratio minimal, l'année du creux,
+les franchissements de seuils et le capital à injecter.}
+
+% =============================================================================
+\section{Restitution}
+
+\fn{scr/rapport.ecrire\_rapport(...)}{Classeur de restitution : S.25.01, détail par module, MCR
+et best estimate.}
+
+\fn{rapport/generer\_rapport.macros() et tableaux()}{Écrivent les valeurs et les corps de
+tableaux sous forme de macros LaTeX. L'objectif est qu'aucun chiffre du rapport ne soit recopié à
+la main : relancer les modèles suffit à le mettre à jour.}
+
+\fn{rapport/generer\_rapport.nb(), pourcent(), texte()}{Formatage à la française et échappement
+des caractères réservés. Une seule fonction d'échappement évite les tableaux cassés par un signe
+pourcent non protégé.}
+
+\fn{pedagogie/generer\_chiffres.bloc\_*}{Un bloc par module, qui refait les étapes intermédiaires
+— actualisation flux par flux, facteur de stress, forme quadratique, formule de variance — pour
+que le cahier pédagogique montre le détail du calcul et non seulement son résultat.}
+
+% =============================================================================
+\section{Index : article du règlement, fonction correspondante}
+
+\begin{table}[h]\centering\small
+\begin{tabularx}{\linewidth}{lX}
+\toprule
+\textbf{Article} & \textbf{Fonction}\\
+\midrule
+28, 77 & \texttt{be\_*}, \texttt{Passifs.evaluer}\\
+37 à 39 & \texttt{marge\_risque}\\
+87, 103 & \texttt{agregation.bscr}\\
+114 à 118 & \texttt{MoteurNonVie.primes\_reserves}, \texttt{.rachat}\\
+119 à 135 & \texttt{MoteurNonVie.catastrophe}\\
+136 à 144 & \texttt{MoteurVie.*}\\
+144 à 163 & \texttt{MoteurSante.*}\\
+164 & \texttt{MoteurMarche.calculer}, \texttt{matrice\_marche}\\
+166, 167 & \texttt{courbe\_choquee}, \texttt{facteurs\_choc\_taux}\\
+168 à 173 & \texttt{MoteurMarche.action}\\
+174 & \texttt{MoteurMarche.immobilier}\\
+176, 180 & \texttt{facteur\_stress\_spread}\\
+184 à 187 & \texttt{MoteurMarche.concentration}\\
+188 & \texttt{MoteurMarche.change}\\
+189 à 202 & \texttt{contrepartie.scr\_type1}, \texttt{.scr\_type2}\\
+204 & \texttt{agregation.operationnel}\\
+207 & \texttt{agregation.ajustements}\\
+218, annexe XVII & \texttt{usp\_reserve}\\
+248 à 253 & \texttt{agregation.mcr}\\
+Directive 2025/2 & \texttt{reforme.*}, \texttt{marge\_risque} (CoC \qty{4.75}{\percent})\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\end{document}

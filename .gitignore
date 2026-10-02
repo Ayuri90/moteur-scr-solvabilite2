@@ -1,0 +1,38 @@
+# Caches, environnements, éditeurs
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+.vscode/
+.idea/
+.DS_Store
+
+# Données et résultats régénérables
+donnees/*
+!donnees/.gitkeep
+resultats/*
+!resultats/.gitkeep
+
+# Fichiers officiels de tiers, à télécharger soi-même (voir README)
+sources/*
+!sources/.gitkeep
+!sources/LISEZMOI.md
+
+# Artefacts engendrés pour les documents
+rapport/figures/
+rapport/chiffres.tex
+pedagogie/chiffres_pedago.tex
+
+# PDF compilés : seuls ceux de livrables/ sont versionnés
+*.pdf
+!livrables/*.pdf
+
+# Compilation LaTeX
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
+*.fls
+*.fdb_latexmk

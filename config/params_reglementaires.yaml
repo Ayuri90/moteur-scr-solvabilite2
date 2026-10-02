@@ -1,0 +1,295 @@
+# =============================================================================
+# PARAMÈTRES RÉGLEMENTAIRES — FORMULE STANDARD (Règlement délégué (UE) 2015/35)
+#
+# [VERIFIE]   valeur reprise du texte via le Single Rulebook de l'EIOPA
+# [AVERIFIER] valeur de mémoire à confronter au texte avant utilisation en production
+# [CHOIX]     paramètre propre à l'entreprise ou à la date d'évaluation
+# =============================================================================
+
+taux:
+  # Art. 166 et 167. Facteurs relatifs de choc par maturité.
+  # ROUTE OFFICIELLE : utiliser les courbes choquées publiées par l'EIOPA
+  # (onglets RFR_spot_no_VA_shock_up / _shock_down du fichier Term Structures).
+  # Les tables ci-dessous servent de repli ; elles ont été confrontées au fichier officiel
+  # du 31/12/2025 et sont identiques aux 21 maturités de référence. 
+  source: "facteurs"              # "facteurs" | "2027" (voir scr/reforme.py)
+  # Facteurs officiels extraits de l'onglet Shocks du fichier EIOPA (150 maturités).
+  # S'il est présent, ce fichier prime sur les tables ci-dessous.
+  fichier_facteurs: "sources/facteurs_choc_taux.csv"
+  onglet_choc_hausse: "Spot_NO_VA_shock_UP"
+  onglet_choc_baisse: "Spot_NO_VA_shock_DOWN"
+  plancher_hausse_absolu: 0.01    # Art. 166(2) : hausse d'au moins 1 point 
+  neutralisation_taux_negatifs: true   # Art. 167(3) ; formule confirmée par le classeur EIOPA 
+  facteurs_hausse:
+    1: 0.70
+    2: 0.70
+    3: 0.64
+    4: 0.59
+    5: 0.55
+    6: 0.52
+    7: 0.49
+    8: 0.47
+    9: 0.44
+    10: 0.42
+    11: 0.39
+    12: 0.37
+    13: 0.35
+    14: 0.34
+    15: 0.33
+    16: 0.31
+    17: 0.30
+    18: 0.29
+    19: 0.27
+    20: 0.26
+    90: 0.20
+  facteurs_baisse:
+    1: 0.75
+    2: 0.65
+    3: 0.56
+    4: 0.50
+    5: 0.46
+    6: 0.42
+    7: 0.39
+    8: 0.36
+    9: 0.33
+    10: 0.31
+    11: 0.30
+    12: 0.29
+    13: 0.28
+    14: 0.28
+    15: 0.27
+    16: 0.28
+    17: 0.28
+    18: 0.28
+    19: 0.29
+    20: 0.29
+    90: 0.20
+
+action:
+  # Art. 169 à 173
+  choc_type1: 0.39                
+  choc_type2: 0.49                
+  choc_strategique: 0.22          
+  choc_infrastructure: 0.30       # infrastructure qualifiante 
+  choc_duree: 0.22                # sous-module fondé sur la durée, non utilisé ici
+  ajustement_symetrique: 0.0790   # valeur EIOPA du 31/12/2025
+  part_ajustement_symetrique_infra: 0.77   
+  correlation_type1_type2: 0.75   
+
+immobilier:
+  choc: 0.25                      # Art. 174 
+
+change:
+  choc_hausse: 0.25               # Art. 188 
+  choc_baisse: 0.25
+
+spread:
+  # Art. 176(3) : obligations et prêts notés. stress = b*dur (dur<=5),
+  # sinon a + b*(dur - borne_inf). 
+  bandes: [5, 10, 15, 20]
+  notes:
+    0: {a: [0.0,   0.045, 0.070, 0.095, 0.120], b: [0.009, 0.005, 0.005, 0.005, 0.005]}
+    1: {a: [0.0,   0.055, 0.085, 0.110, 0.135], b: [0.011, 0.006, 0.005, 0.005, 0.005]}
+    2: {a: [0.0,   0.070, 0.105, 0.130, 0.155], b: [0.014, 0.007, 0.005, 0.005, 0.005]}
+    3: {a: [0.0,   0.125, 0.200, 0.250, 0.300], b: [0.025, 0.015, 0.010, 0.010, 0.005]}
+    4: {a: [0.0,   0.225, 0.350, 0.440, 0.466], b: [0.045, 0.025, 0.018, 0.005, 0.005]}
+    5: {a: [0.0,   0.375, 0.585, 0.610, 0.635], b: [0.075, 0.042, 0.005, 0.005, 0.005]}
+    6: {a: [0.0,   0.375, 0.585, 0.610, 0.635], b: [0.075, 0.042, 0.005, 0.005, 0.005]}
+  # Art. 176(4) : titres non notés 
+  non_note: {bandes: [5, 10, 20], a: [0.0, 0.15, 0.235, 0.355], b: [0.03, 0.017, 0.012, 0.005]}
+  # Art. 180(1) : obligations sécurisées CQS 0 et 1 
+  covered_bonds: {0: 0.007, 1: 0.009}
+  duration_plancher: 1.0          # Art. 176(2)
+  exposition_exemptee:
+    souverains_eee: true          # expositions souveraines EEE en devise locale : facteur nul
+    codes_pays_eee: [FR, DE, IT, ES, BE, NL, PT, IE, AT, FI, GR, LU]
+  infrastructure_reduction: 0.75  # facteur de réduction appliqué aux infra qualifiantes 
+
+concentration:
+  # Art. 184 et 186
+  seuil_par_cqs: {0: 0.03, 1: 0.03, 2: 0.03, 3: 0.015, 4: 0.015, 5: 0.015, 6: 0.015}
+  seuil_non_note: 0.015
+  facteur_par_cqs: {0: 0.12, 1: 0.12, 2: 0.21, 3: 0.27, 4: 0.73, 5: 0.73, 6: 0.73}
+  facteur_non_note: 0.73
+  exempter_souverains_eee: true
+
+correlations_marche:
+  # Art. 164 : A = 0 si le choc de taux retenu est la hausse, 0,5 si c'est la baisse
+  ordre: [taux, action, immobilier, spread, change, concentration]
+  a_hausse: 0.0
+  a_baisse: 0.5
+  matrice:
+    - [1.0, "A", "A", "A", 0.25, 0.0]
+    - ["A", 1.0, 0.75, 0.75, 0.25, 0.0]
+    - ["A", 0.75, 1.0, 0.50, 0.25, 0.0]
+    - ["A", 0.75, 0.50, 1.0, 0.25, 0.0]
+    - [0.25, 0.25, 0.25, 0.25, 1.0, 0.0]
+    - [0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+
+contrepartie:
+  # Art. 199 à 202
+  pd_par_cqs: {0: 0.00002, 1: 0.0001, 2: 0.0005, 3: 0.0024, 4: 0.012, 5: 0.042, 6: 0.042}
+  pd_non_note: 0.024
+  lgd_reassurance: 0.50           # 50 % des recouvrables et créances, net des sûretés
+  lgd_tresorerie: 1.00            # dépôts et trésorerie : perte totale en cas de défaut
+  seuils_racine_variance: [0.05, 0.20]
+  multiplicateurs: [3.0, 5.0]
+  type2_facteur_standard: 0.15
+  type2_facteur_echues_3m: 0.90
+
+fiscalite:
+  taux_impot: 0.25                # taux d'IS français 
+
+# =============================================================================
+# SOUSCRIPTION VIE (Art. 136 à 144)
+# =============================================================================
+vie:
+  mortalite: 0.15                 # hausse permanente des q_x, Art. 137 
+  longevite: 0.20                 # baisse permanente des q_x, Art. 138 
+  rachat_hausse: 0.50             # hausse relative des taux, plafonnée à 100 %, Art. 142 
+  rachat_baisse: 0.50             # baisse relative, limitée à 20 points en absolu 
+  rachat_baisse_plancher_absolu: 0.20
+  rachat_massif: 0.40             # contrats de particuliers, Art. 142(6) 
+  frais_hausse: 0.10              # +10 % de frais, Art. 143 
+  frais_inflation_sup: 0.01       # +1 point d'inflation des frais 
+  revision: 0.0                   # sans objet : aucune rente révisable en portefeuille [CHOIX]
+  cat_mortalite_absolu: 0.0015    # +0,15 point sur les q_x la 1re année, Art. 144 
+  correlations:
+    ordre: [mortalite, longevite, invalidite, rachat, frais, revision, catastrophe]
+    matrice:                      # Annexe IV 
+      - [1.00, -0.25, 0.25, 0.00, 0.25, 0.00, 0.25]
+      - [-0.25, 1.00, 0.00, 0.25, 0.25, 0.25, 0.00]
+      - [0.25, 0.00, 1.00, 0.00, 0.50, 0.00, 0.25]
+      - [0.00, 0.25, 0.00, 1.00, 0.50, 0.00, 0.25]
+      - [0.25, 0.25, 0.50, 0.50, 1.00, 0.50, 0.25]
+      - [0.00, 0.25, 0.00, 0.00, 0.50, 1.00, 0.00]
+      - [0.25, 0.00, 0.25, 0.25, 0.25, 0.00, 1.00]
+
+# =============================================================================
+# SOUSCRIPTION SANTÉ (Art. 144 à 163)
+# =============================================================================
+sante:
+  slt:
+    mortalite: 0.15
+    longevite: 0.20
+    recuperation_invalidite: 0.80  # baisse de 20 % des taux de sortie d'incapacité 
+    rachat_hausse: 0.0             # rentes en cours de service : pas de rachat [CHOIX]
+    rachat_massif: 0.0
+    frais_hausse: 0.10
+    frais_inflation_sup: 0.01
+    revision: 0.04                 # rentes santé révisables, Art. 158 
+    correlations:
+      ordre: [mortalite, longevite, invalidite, rachat, frais, revision]
+      matrice:                     # Annexe IV 
+        - [1.00, -0.25, 0.25, 0.00, 0.25, 0.00]
+        - [-0.25, 1.00, 0.00, 0.25, 0.25, 0.25]
+        - [0.25, 0.00, 1.00, 0.00, 0.50, 0.00]
+        - [0.00, 0.25, 0.00, 1.00, 0.50, 0.00]
+        - [0.25, 0.25, 0.50, 0.50, 1.00, 0.50]
+        - [0.00, 0.25, 0.00, 0.00, 0.50, 1.00]
+  nslt:
+    # Annexe II : écarts types par ligne d'activité 
+    sigma:
+      sante_frais_soins: {primes: 0.05, reserves: 0.054}
+    facteur_ecart_type: 3.0        # SCR = 3 x sigma x V
+    rachat_nslt: 0.40              # cessation de 40 % des contrats, Art. 150 
+    correlation_primes_rachat: 0.0
+  cat:
+    # Art. 160 à 163 — VERSION SIMPLIFIÉE PARAMÉTRIQUE, à remplacer par le calcul
+    # complet (accident de masse, concentration d'accident, pandémie) 
+    accident_masse: {part_assures_touches: 0.0005, cout_moyen_par_sinistre: 0.015}
+    concentration: {nb_personnes_plus_grand_groupe: 500, cout_moyen_par_sinistre: 0.015}
+    pandemie: {taux_recours_soins: 0.010, cout_moyen_par_sinistre: 0.004}
+  correlations:
+    ordre: [slt, nslt, catastrophe]
+    matrice:                       # Art. 144 
+      - [1.00, 0.50, 0.25]
+      - [0.50, 1.00, 0.25]
+      - [0.25, 0.25, 1.00]
+
+# =============================================================================
+# SOUSCRIPTION NON-VIE (Art. 114 à 135)
+# =============================================================================
+non_vie:
+  # Annexe II : écarts types primes et réserves, nets de réassurance 
+  sigma:
+    auto_rc:       {primes: 0.100, reserves: 0.090, lob_s2: 4}
+    auto_dommages: {primes: 0.080, reserves: 0.080, lob_s2: 5}
+    incendie_mrh:  {primes: 0.080, reserves: 0.100, lob_s2: 7}
+    rc_generale:   {primes: 0.140, reserves: 0.110, lob_s2: 8}
+  facteur_ecart_type: 3.0
+  facteur_diversification_geographique: 1.0   # activité concentrée sur la France
+  correlations_lob:                            # Annexe IV, extrait pour nos 4 lignes 
+    ordre: [auto_rc, auto_dommages, incendie_mrh, rc_generale]
+    matrice:
+      - [1.00, 0.50, 0.25, 0.50]
+      - [0.50, 1.00, 0.25, 0.25]
+      - [0.25, 0.25, 1.00, 0.25]
+      - [0.50, 0.25, 0.25, 1.00]
+  rachat: 0.40                                 # cessation de 40 % des contrats, Art. 118 
+  correlations:
+    ordre: [primes_reserves, rachat, catastrophe]
+    matrice:                                   # Art. 114 
+      - [1.00, 0.00, 0.25]
+      - [0.00, 1.00, 0.00]
+      - [0.25, 0.00, 1.00]
+  catastrophe:
+    # VERSION SIMPLIFIÉE : facteurs agrégés au lieu des zones CRESTA de l'annexe V 
+    perils_naturels:
+      tempete:     {facteur_capitaux: 0.00090}
+      inondation:  {facteur_capitaux: 0.00055}
+      grele:       {facteur_capitaux: 0.00035}
+      subsidence:  {facteur_capitaux: 0.00025}
+    correlation_perils: 0.0                    # périls supposés indépendants
+    auto:
+      facteur_par_vehicule: 0.00005            # M€ par véhicule assuré 
+      plancher: 3.0                            # M€
+    incendie: {utiliser_plus_grande_concentration: true}
+    responsabilite: {facteur_primes: 1.00}     # en % des primes RC générale 
+    appliquer_xl_cat: true
+
+# =============================================================================
+# OPÉRATIONNEL, AGRÉGATION, LAC ET MCR
+# =============================================================================
+operationnel:
+  # Art. 204 
+  facteur_primes_vie: 0.04
+  facteur_primes_non_vie: 0.03
+  facteur_provisions_vie: 0.0045
+  facteur_provisions_non_vie: 0.03
+  plafond_bscr: 0.30
+  facteur_frais_uc: 0.25
+
+bscr:
+  ordre: [marche, defaut, vie, sante, non_vie]
+  matrice:                                     # Annexe IV 
+    - [1.00, 0.25, 0.25, 0.25, 0.25]
+    - [0.25, 1.00, 0.25, 0.25, 0.50]
+    - [0.25, 0.25, 1.00, 0.25, 0.00]
+    - [0.25, 0.25, 0.25, 1.00, 0.00]
+    - [0.25, 0.50, 0.00, 0.00, 1.00]
+
+lac:
+  # LAC TP : l'absorption par la participation aux bénéfices est déjà intégrée dans les
+  # modules (règle de revalorisation). L'ajustement explicite est donc nul en V1,
+  # sous réserve du plafond des prestations discrétionnaires futures (FDB). [CHOIX]
+  tp_explicite: 0.0
+  # LAC DT : Art. 207. Plafond = taux d'IS x (BSCR + opérationnel + ajustement TP)
+  dt_part_benefices_futurs: 0.50               # part du plafond justifiée par des bénéfices futurs [CHOIX]
+
+mcr:
+  # Art. 248 à 253 — facteurs linéaires 
+  vie:
+    be_epargne_garantie: 0.037
+    be_uc: 0.007
+    be_autres_vie: 0.021
+    capitaux_sous_risque: 0.0007
+  non_vie:                                     # (facteur BE, facteur primes) par ligne
+    auto_rc:       [0.085, 0.094]
+    auto_dommages: [0.075, 0.075]
+    incendie_mrh:  [0.107, 0.107]
+    rc_generale:   [0.100, 0.110]
+    sante_frais_soins: [0.047, 0.047]
+  plancher_scr: 0.25
+  plafond_scr: 0.45
+  minimum_absolu: 7.4                          # entreprise composite, en M€ [AVERIFIER]

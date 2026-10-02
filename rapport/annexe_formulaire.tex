@@ -1,0 +1,218 @@
+% =============================================================================
+% Annexe A, formulaire : toutes les formules effectivement implémentées.
+% Ce fichier est inclus par rapport_scr.tex mais reste lisible seul.
+% =============================================================================
+
+\section*{Annexe A, formulaire de la formule standard}
+\addcontentsline{toc}{section}{Annexe A, formulaire de la formule standard}
+
+\small
+\setlength{\parskip}{4pt}
+\setlength{\parindent}{0pt}
+Cette annexe recense les formules effectivement implémentées, avec leur référence dans le
+règlement délégué (UE) 2015/35. Sauf mention contraire, le SCR d'un sous-module est la perte
+de fonds propres de base provoquée par le choc :
+\[
+\mathrm{SCR}_i \;=\; \max\bigl(0,\; \mathrm{FPB}_0 - \mathrm{FPB}_i\bigr),
+\qquad
+\mathrm{FPB} \;=\; A - \mathrm{BE} - \mathrm{MR} - \text{autres passifs},
+\]
+où $A$ est la valeur de marché de l'actif. Les provisions techniques sont intégralement
+reprojetées sous chaque choc, ce qui rend le calcul net des actions du management.
+
+% -----------------------------------------------------------------------------
+\subsection*{A.1 Provisions techniques et courbe des taux}
+
+\textbf{Best estimate} (art. 28) : $\mathrm{BE} = \sum_{t} \mathrm{FT}_t \, v(t)$, avec
+$v(t) = (1+s_t)^{-t}$ le facteur d'actualisation de la courbe sans risque.
+
+\textbf{Extrapolation Smith-Wilson} (régime actuel) : les prix zéro-coupon s'écrivent
+$P(t) = e^{-\omega t} + \sum_j \zeta_j\, W(t,u_j)$ avec $\omega = \ln(1+\mathrm{UFR})$ et
+\[
+W(t,u) = e^{-\omega(t+u)}\Bigl[\alpha\min(t,u) - \tfrac12 e^{-\alpha\max(t,u)}
+\bigl(e^{\alpha\min(t,u)} - e^{-\alpha\min(t,u)}\bigr)\Bigr].
+\]
+Le paramètre $\alpha$ est le plus petit réel supérieur à $0{,}05$ tel que l'écart entre le
+forward instantané au point de convergence et $\omega$ n'excède pas un point de base.
+
+\textbf{Extrapolation alternative} (régime 2027) : au-delà du premier point de lissage
+$\mathrm{FSP}$, le forward moyen sur $h$ années vaut
+\[
+f(h) = \mathrm{LLFR} + \bigl(\mathrm{UFR}^{c} - \mathrm{LLFR}\bigr)\,
+\frac{1-e^{-a h}}{a h},
+\]
+où $\mathrm{LLFR}$ est la moyenne pondérée des forwards liquides et $\mathrm{UFR}^{c}$ l'UFR
+en composition continue. Sous choc de taux, l'UFR est décalée de $\pm 15$ points de base.
+
+\textbf{Marge de risque} (art. 37 à 39) :
+\[
+\mathrm{MR} = \mathrm{CoC} \sum_{t\ge 0} \frac{\mathrm{SCR}^{\text{nc}}(t)}{(1+s_{t+1})^{t+1}},
+\qquad
+\mathrm{SCR}^{\text{nc}}(t) \approx \mathrm{SCR}^{\text{nc}}(0)\,\frac{\mathrm{BE}(t)}{\mathrm{BE}(0)} ,
+\]
+où $\mathrm{SCR}^{\text{nc}}$ exclut le risque de marché. Le régime 2027 remplace
+$\mathrm{CoC}=6\,\%$ par $4{,}75\,\%$ et pondère chaque année par
+$\max(\lambda^{t}, \underline{\lambda})$.
+
+% -----------------------------------------------------------------------------
+\subsection*{A.2 Risque de marché (art. 164 à 188)}
+
+\textbf{Taux} (art. 166 et 167). Régime actuel : $s_t^{\uparrow} = \max\{s_t(1+f^{\uparrow}_t),\,
+s_t + 1\,\%\}$ et $s_t^{\downarrow} = s_t(1-f^{\downarrow}_t)$, sans choc sur les taux négatifs.
+Régime 2027 : $s_t^{\uparrow} = s_t(1+b_t) + a_t$ et
+$s_t^{\downarrow} = \max\{s_t(1-b_t) - a_t,\, \underline{s}_t\}$, le plancher $\underline{s}_t$
+dépendant du terme.
+
+\textbf{Action} (art. 168 à 172) : chocs de $39\,\%$ (type 1) et $49\,\%$ (type 2), majorés de
+l'ajustement symétrique $\mathrm{SA}$ ; $22\,\%$ pour les participations stratégiques.
+Agrégation :
+$\mathrm{SCR}_{\text{act}} = \sqrt{\mathrm{SCR}_1^2 + 2\rho\,\mathrm{SCR}_1\mathrm{SCR}_2
++ \mathrm{SCR}_2^2}$ avec $\rho = 0{,}75$.
+
+\textbf{Immobilier} (art. 174) : choc de $25\,\%$. \quad
+\textbf{Change} (art. 188) : $\pm 25\,\%$ par devise, le pire scénario étant retenu.
+
+\textbf{Spread} (art. 176 et 180) : pour une obligation de duration modifiée $d$ et d'échelon
+de qualité de crédit $q$,
+\[
+\mathrm{stress}(q,d) = \min\bigl(a_{q,k} + b_{q,k}\,(d - \underline{d}_k),\; 1\bigr),
+\qquad d \ge 1,
+\]
+$k$ désignant la bande de duration ($\le 5$, $]5,10]$, $]10,15]$, $]15,20]$, $>20$). Les
+expositions souveraines de l'EEE libellées en monnaie locale sont exemptées.
+
+\textbf{Concentration} (art. 184 à 187) : pour chaque groupe d'émetteurs $i$,
+\[
+\mathrm{XS}_i = \max\Bigl(0,\; \frac{E_i}{A^{xl}} - \mathrm{CT}_{q}\Bigr),
+\qquad
+\mathrm{Conc}_i = A^{xl}\,\mathrm{XS}_i\, g_{q},
+\qquad
+\mathrm{SCR}_{\text{conc}} = \sqrt{\textstyle\sum_i \mathrm{Conc}_i^2},
+\]
+$A^{xl}$ étant l'actif hors contrats en unités de compte.
+
+\textbf{Agrégation} (art. 164) :
+$\mathrm{SCR}_{\text{mar}} = \sqrt{\mathbf{v}^{\top} \mathbf{C}(A)\, \mathbf{v}}$, où le
+paramètre $A$ vaut $0$ si le scénario de taux retenu est la hausse et $0{,}5$ s'il s'agit de la
+baisse. Le régime 2027 ramène la corrélation taux-spread à $0{,}25$ en scénario baissier.
+
+% -----------------------------------------------------------------------------
+\subsection*{A.3 Défaut de la contrepartie (art. 189 à 202)}
+
+Expositions de type 1 : $\mathrm{LGD}_j = 50\,\% \times (\text{recouvrables} + \text{créances})$
+pour la réassurance. La variance de la perte agrégée vaut
+\[
+V = \sum_{j,k} \frac{\mathrm{PD}_j \mathrm{PD}_k}
+{1{,}25(\mathrm{PD}_j+\mathrm{PD}_k) - \mathrm{PD}_j\mathrm{PD}_k}\,
+\mathrm{TLGD}_j \mathrm{TLGD}_k
+\;+\; \sum_j \frac{1{,}5\,\mathrm{PD}_j(1-\mathrm{PD}_j)}{2{,}5-\mathrm{PD}_j}\,
+\sum_{i \in j}\mathrm{LGD}_i^2 ,
+\]
+puis
+\[
+\mathrm{SCR}_1 =
+\begin{cases}
+3\sqrt{V} & \text{si } \sqrt{V} \le 5\,\% \sum \mathrm{LGD},\\
+5\sqrt{V} & \text{si } 5\,\% < \sqrt{V} \le 20\,\% \sum \mathrm{LGD},\\
+\sum \mathrm{LGD} & \text{sinon.}
+\end{cases}
+\]
+Type 2 : $\mathrm{SCR}_2 = 15\,\%\times$ créances non échues $+\; 90\,\%\times$ créances échues
+depuis plus de trois mois. Agrégation :
+$\mathrm{SCR}_{\text{déf}} = \sqrt{\mathrm{SCR}_1^2 + 1{,}5\,\mathrm{SCR}_1\mathrm{SCR}_2
++ \mathrm{SCR}_2^2}$.
+
+% -----------------------------------------------------------------------------
+\subsection*{A.4 Souscription vie et santé (art. 136 à 163)}
+
+\begin{table}[H]\centering\footnotesize
+\begin{tabularx}{\linewidth}{lXl}
+\toprule
+\textbf{Sous-module} & \textbf{Choc appliqué} & \textbf{Article}\\
+\midrule
+Mortalité & $q_x \rightarrow 1{,}15\,q_x$, permanent & 137\\
+Longévité & $q_x \rightarrow 0{,}80\,q_x$, permanent & 138\\
+Invalidité (santé) & taux de sortie d'incapacité réduits de $20\,\%$ & 153\\
+Rachat & $\times 1{,}5$ ; $\times 0{,}5$ ; ou rachat massif de $40\,\%$ & 142\\
+Frais & $+10\,\%$ de frais et $+1$ point d'inflation & 143\\
+Révision & $+3\,\%$ (vie) ou $+4\,\%$ (santé) sur les arrérages & 141, 158\\
+Catastrophe & $q_x \rightarrow q_x + 0{,}15$ point la première année & 144\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Le choc de rachat massif n'est appliqué qu'aux contrats dont le rachat accroît les provisions,
+contrat par contrat. L'agrégation utilise les matrices de l'annexe IV, de forme
+$\sqrt{\mathbf{v}^{\top}\mathbf{C}\,\mathbf{v}}$. Le module santé combine ensuite SLT, NSLT et
+catastrophe avec les corrélations $\rho_{\text{SLT,NSLT}} = 0{,}5$ et
+$\rho_{\cdot,\text{CAT}} = 0{,}25$.
+
+% -----------------------------------------------------------------------------
+\subsection*{A.5 Souscription non-vie (art. 114 à 135)}
+
+Pour chaque ligne d'activité $s$, avec $V_{p,s} = \max(P_s, P_{\text{last},s}) + \mathrm{FP}_s$
+et $V_{r,s}$ le best estimate de sinistres :
+\[
+\sigma_s = \frac{\sqrt{(\sigma_{p,s}V_{p,s})^2 + \sigma_{p,s}V_{p,s}\sigma_{r,s}V_{r,s}
++ (\sigma_{r,s}V_{r,s})^2}}{V_{p,s}+V_{r,s}},
+\qquad
+\sigma = \frac{\sqrt{\sum_{s,t}\mathrm{Corr}_{s,t}\,\sigma_s V_s \sigma_t V_t}}{V},
+\]
+puis $\mathrm{SCR}_{\text{prim,rés}} = 3\,\sigma\,V$ avec $V = \sum_s V_s$.
+
+\textbf{Paramètres propres à l'entreprise} (art. 218 et annexe XVII) :
+$\sigma^{\star} = c\,\sigma^{\mathrm{USP}} + (1-c)\,\sigma^{\text{std}}$, le facteur de
+crédibilité $c$ dépendant du nombre d'années d'historique ($c = 0{,}74$ pour dix ans).
+
+\textbf{Catastrophe} : agrégation quadratique des périls naturels et des scénarios d'origine
+humaine, puis application du traité en excédent de sinistres,
+$L^{\text{net}} = \min(L, \text{priorité}) + \max(0,\, L - \text{priorité} - \text{portée})$.
+
+% -----------------------------------------------------------------------------
+\subsection*{A.6 Agrégation finale (art. 87, 103, 204 à 207, 248 à 253)}
+
+\[
+\mathrm{BSCR} = \sqrt{\sum_{i,j}\mathrm{Corr}_{i,j}\,\mathrm{SCR}_i\,\mathrm{SCR}_j}
+\;+\; \mathrm{SCR}_{\text{incorporels}},
+\]
+\[
+\mathrm{SCR}_{\text{op}} = \min\bigl(30\,\%\times\mathrm{BSCR},\;
+\max(\mathrm{Op}_{\text{primes}}, \mathrm{Op}_{\text{prov}})\bigr)
++ 25\,\%\times \mathrm{Dép}_{\text{UC}},
+\]
+\[
+\mathrm{SCR} = \mathrm{BSCR} + \mathrm{SCR}_{\text{op}}
++ \mathrm{Adj}_{\mathrm{TP}} + \mathrm{Adj}_{\mathrm{DT}},
+\]
+avec $\mathrm{Adj}_{\mathrm{TP}} = -\min\bigl(\mathrm{FDB},\;
+\mathrm{BSCR}^{\text{brut}} - \mathrm{BSCR}^{\text{net}}\bigr)$ et
+$\mathrm{Adj}_{\mathrm{DT}} = -\min\bigl(\tau\,(\mathrm{BSCR} + \mathrm{SCR}_{\text{op}}
++ \mathrm{Adj}_{\mathrm{TP}}),\; \text{capacité justifiable}\bigr)$, $\tau$ étant le taux
+d'impôt. Enfin
+\[
+\mathrm{MCR} = \max\Bigl\{\min\bigl(\max(\mathrm{MCR}_{\text{lin}},\,25\,\%\,\mathrm{SCR}),\;
+45\,\%\,\mathrm{SCR}\bigr),\; \mathrm{AMCR}\Bigr\}.
+\]
+
+% -----------------------------------------------------------------------------
+\subsection*{A.7 Générateur de scénarios et modèle interne}
+
+\textbf{Hull-White} : $\mathrm{d}r_t = (\theta(t) - a r_t)\mathrm{d}t + \sigma \mathrm{d}W_t$,
+de solution exacte à pas annuel
+$r_{t+1} = r_t e^{-a} + \alpha(t+1) - \alpha(t)e^{-a}
++ \sigma\sqrt{\tfrac{1-e^{-2a}}{2a}}\,\varepsilon$, avec
+$\alpha(t) = f(0,t) + \tfrac{\sigma^2}{2a^2}(1-e^{-at})^2$, et prix zéro-coupon
+$P(t,T) = A(t,T)e^{-B(t,T)r_t}$, $B(t,T) = (1-e^{-a(T-t)})/a$. Le contrôle market-consistent
+est $\mathbb{E}[D_T] = P(0,T)$ et $\mathbb{E}[D_T S_T]/S_0 = 1$.
+
+\textbf{Valeur temps des options} : $\mathrm{TVOG} = \mathrm{BE}^{\text{stoch}}
+- \mathrm{BE}^{\text{central}}$ ; les prestations discrétionnaires futures s'obtiennent par
+$\mathrm{FDB} = \mathrm{BE}^{\text{stoch}} - \mathrm{BE}^{\text{garanti}}$.
+
+\textbf{Modèle interne} : $\mathrm{VaR}_{99{,}5\%}(L) - \mathbb{E}[L]$, la perte agrégée $L$
+étant construite par copule, $L = \sum_k F_k^{-1}(U_k)$ avec $(U_1,\dots,U_n)$ gaussienne ou de
+Student. La TVaR, $\mathbb{E}[L \mid L \ge \mathrm{VaR}]$, est calculée en parallèle pour
+mesurer l'épaisseur de la queue.
+
+\setlength{\parskip}{0pt}
+\normalsize

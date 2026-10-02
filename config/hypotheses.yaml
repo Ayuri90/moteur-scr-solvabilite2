@@ -1,0 +1,499 @@
+# =============================================================================
+# HYPOTHÈSES DE LA COMPAGNIE COMPOSITE FICTIVE — Projet SCR
+# Montants en millions d'euros (M€), taux en décimal, spreads en points de base
+#
+# Légende des sources :
+#   [MACSF]  calibré sur le SFCR 2025 du groupe MACSF, facteur d'échelle ~1/4
+#   [ACPR]   ordres de grandeur de marché (ACPR / Banque de France, 2025)
+#   [INDIC]  valeur indicative à remplacer par une donnée officielle
+#   [CHOIX]  choix de modélisation du projet
+# =============================================================================
+
+general:
+  nom_compagnie: "Mutuelle Composite Fictive (MCF)"
+  date_evaluation: "2025-12-31"
+  graine_aleatoire: 2025          # reproductibilité totale
+  dossier_sortie: "donnees"
+
+# -----------------------------------------------------------------------------
+# COURBE DES TAUX SANS RISQUE
+# -----------------------------------------------------------------------------
+courbe:
+  # "eiopa"  : lit le fichier officiel EIOPA (recommandé)
+  # "smith_wilson" : reconstruit une courbe à partir des taux swap ci-dessous
+  source: "eiopa"
+  fichier_eiopa: "sources/EIOPA_RFR_20251231_Term_Structures.xlsx"
+  onglet_eiopa: "RFR_spot_no_VA"
+  colonne_eiopa: "Euro"
+  ufr: 0.0330                     # UFR applicable en 2025 [EIOPA]
+  llp: 20                         # last liquid point EUR
+  point_convergence: 60           # LLP + 40 ans
+  tolerance_convergence_bp: 1.0
+  alpha_min: 0.05
+  cra_bp: 10                      # credit risk adjustment
+  maturite_max: 150
+  # Taux swap EUR au 31/12/2025 — [INDIC] ordres de grandeur
+  taux_swap:
+    1: 0.0205
+    2: 0.0215
+    3: 0.0225
+    5: 0.0245
+    7: 0.0262
+    10: 0.0285
+    12: 0.0295
+    15: 0.0305
+    20: 0.0310
+
+# -----------------------------------------------------------------------------
+# BILAN CIBLE [MACSF] — les BE sont des cibles d'ordre de grandeur,
+# ils seront recalculés par le modèle de projection
+# -----------------------------------------------------------------------------
+bilan_cible:
+  actif:
+    placements_hors_uc: 8600
+    actifs_uc: 2100
+    provisions_cedees: 90
+    creances_tresorerie_autres: 210
+  passif:
+    be_epargne_euro: 6000
+    be_prevoyance_rentes: 250
+    be_uc: 2050
+    be_non_vie: 340
+    be_sante: 145
+    marge_risque: 95
+    impots_differes_passifs: 120
+    autres_passifs: 350
+
+# -----------------------------------------------------------------------------
+# ALLOCATION D'ACTIFS HORS UC (après transparence) [ACPR] + [CHOIX]
+# -----------------------------------------------------------------------------
+allocation:
+  souverains: 0.32
+  corporate_financieres: 0.25
+  corporate_non_financieres: 0.15
+  actions_type1: 0.08
+  actions_type2: 0.02
+  participations_strategiques: 0.01
+  immobilier: 0.07
+  monetaire_depots: 0.06
+  prets_infrastructure: 0.04
+
+obligations:
+  maturite_residuelle_min: 1
+  maturite_residuelle_max: 30
+  souverains:
+    nb_lignes: 45
+    # pays : (poids, spread vs courbe sans risque en bp [INDIC], CQS)
+    pays:
+      FR: {poids: 0.60, spread_bp: 85,  cqs: 1}
+      DE: {poids: 0.10, spread_bp: 5,   cqs: 0}
+      IT: {poids: 0.12, spread_bp: 105, cqs: 2}
+      ES: {poids: 0.10, spread_bp: 65,  cqs: 1}
+      BE: {poids: 0.08, spread_bp: 60,  cqs: 1}
+    maturite_moyenne: 14
+  corporate_financieres:
+    nb_lignes: 90
+    nb_emetteurs: 35
+    repartition_cqs: {0: 0.05, 1: 0.30, 2: 0.45, 3: 0.17, 4: 0.03}
+    maturite_moyenne: 7
+    part_covered_bonds: 0.20       # obligations sécurisées (traitement spread réduit)
+  corporate_non_financieres:
+    nb_lignes: 60
+    nb_emetteurs: 30
+    repartition_cqs: {0: 0.02, 1: 0.18, 2: 0.45, 3: 0.30, 4: 0.05}
+    maturite_moyenne: 8
+  # spread moyen par CQS en bp [INDIC] — à calibrer sur les indices ICE BofA (FRED)
+  spread_par_cqs_bp: {0: 30, 1: 55, 2: 85, 3: 130, 4: 280, 5: 450, 6: 700}
+  dispersion_spread: 0.20          # écart-type relatif autour du spread moyen
+  ecart_coupon_historique: 0.010   # dispersion des coupons (obligations émises à taux bas)
+
+actions:
+  type1:
+    nb_lignes: 40
+    part_zone_euro: 0.75
+    rendement_dividende: 0.030
+  type2:
+    nb_lignes: 12                  # private equity, non coté
+  participations:
+    nb_lignes: 2
+  # part des actions type 1 éligibles au traitement "long terme" (LTEI) [CHOIX]
+  part_ltei: 0.0
+
+immobilier:
+  nb_lignes: 10
+  rendement_locatif: 0.042
+  part_usage_propre: 0.15
+
+monetaire:
+  part_depots_bancaires: 0.35      # le reste en OPC monétaires (look-through)
+  banques:
+    BANQUE_A: {poids: 0.40, cqs: 1}
+    BANQUE_B: {poids: 0.35, cqs: 1}
+    BANQUE_C: {poids: 0.25, cqs: 2}
+
+prets_infrastructure:
+  nb_lignes: 8
+  part_infra_eligible: 0.60        # infrastructure qualifiante
+  cqs_moyen: 2
+
+# -----------------------------------------------------------------------------
+# ACTIFS EN REPRÉSENTATION DES UC (look-through)
+# -----------------------------------------------------------------------------
+uc:
+  allocation:
+    actions: 0.55
+    obligations: 0.28
+    immobilier: 0.10
+    monetaire: 0.07
+
+# -----------------------------------------------------------------------------
+# CONTREPARTIES (risque de défaut)
+# -----------------------------------------------------------------------------
+contreparties:
+  reassureurs:
+    REASS_1: {part: 0.35, cqs: 1}
+    REASS_2: {part: 0.30, cqs: 1}
+    REASS_3: {part: 0.20, cqs: 2}
+    REASS_4: {part: 0.15, cqs: 2}
+  creances:
+    creances_assures_intermediaires: 70
+    part_echues_plus_3_mois: 0.08
+    tresorerie_banques: 60
+    autres_actifs: 80
+
+# -----------------------------------------------------------------------------
+# PASSIF VIE
+# -----------------------------------------------------------------------------
+epargne_euro:
+  nb_model_points: 600
+  pm_totale: 6100                  # [MACSF] x 1/4
+  collecte_annuelle: 450           # primes émises annuelles [MACSF]
+  ppe_fdb: 230                     # 3,8 % des PM [MACSF]
+  taux_servi_n: 0.0315             # [MACSF]
+  age_moyen: 56
+  age_ecart_type: 14
+  age_min: 18
+  age_max: 95
+  anciennete_max: 35
+  # TMG selon la génération du contrat [CHOIX]
+  tmg_par_generation:
+    - {anciennete_min: 0,  anciennete_max: 10, tmg: 0.000}
+    - {anciennete_min: 10, anciennete_max: 18, tmg: 0.005}
+    - {anciennete_min: 18, anciennete_max: 25, tmg: 0.015}
+    - {anciennete_min: 25, anciennete_max: 36, tmg: 0.025}
+  chargement_encours: 0.0070
+  taux_participation_financiere: 0.85
+  taux_participation_technique: 0.90
+  # rachats structurels par ancienneté (totaux + partiels) [INDIC]
+  rachat_structurel:
+    - {anciennete_min: 0, anciennete_max: 4,  taux: 0.030}
+    - {anciennete_min: 4, anciennete_max: 8,  taux: 0.040}
+    - {anciennete_min: 8, anciennete_max: 9,  taux: 0.085}   # pic fiscal à 8 ans
+    - {anciennete_min: 9, anciennete_max: 99, taux: 0.050}
+  # rachats conjoncturels — fourchettes ONC ACPR 2013
+  rachat_conjoncturel:
+    plafond:  {alpha: -0.04, beta: 0.00,  gamma: 0.01, delta: 0.04, rc_min: -0.04, rc_max: 0.40}
+    plancher: {alpha: -0.06, beta: -0.02, gamma: 0.01, delta: 0.02, rc_min: -0.06, rc_max: 0.20}
+
+epargne_uc:
+  nb_model_points: 300
+  pm_totale: 2100
+  collecte_annuelle: 170
+  age_moyen: 52
+  age_ecart_type: 13
+  chargement_encours: 0.0085
+  retrocession_encours: 0.0045
+  rachat_structurel: 0.055
+  garantie_plancher_part: 0.25     # part des contrats avec garantie plancher décès
+
+temporaire_deces:
+  nb_model_points: 400
+  primes_annuelles: 40
+  chargement_prime: 0.60           # prime = q_x * capital * (1 + chargement)
+  capital_moyen: 0.18              # M€ (180 k€)
+  age_moyen: 45
+  age_ecart_type: 10
+  duree_residuelle_max: 20
+  taux_chute: 0.07
+
+rentes_viageres:
+  nb_model_points: 250
+  be_cible: 150
+  age_moyen: 74
+  age_ecart_type: 7
+  part_reversion: 0.30
+  taux_reversion: 0.60
+  frais_gestion: 0.02              # en % des arrérages
+
+# -----------------------------------------------------------------------------
+# MORTALITÉ
+# -----------------------------------------------------------------------------
+mortalite:
+  # "fichier" : TH/TF 00-02 ou TGH/TGF 05 fournies en CSV (colonnes age,qx)
+  # "makeham" : approximation paramétrique [INDIC]
+  # "fichier" : tables réglementaires extraites par scripts/extraire_tables_mortalite.py
+  # "makeham" : approximation paramétrique de repli [INDIC]
+  source: "fichier"
+  fichiers:
+    homme: "sources/TH0002.csv"            # TH 00-02 en cas de décès
+    femme: "sources/TF0002.csv"            # TF 00-02 en cas de décès
+    rente_homme: "sources/TGH05.csv"       # générationnelle, format generation;age;qx
+    rente_femme: "sources/TGF05.csv"
+  makeham:
+    homme: {A: 0.00020, B: 0.000030, c: 1.1000}
+    femme: {A: 0.00012, B: 0.000009, c: 1.1060}
+  abattement_rentes: 0.80           # utilisé uniquement en mode "makeham" [INDIC]
+  part_hommes: 0.50
+
+# -----------------------------------------------------------------------------
+# NON-VIE
+# -----------------------------------------------------------------------------
+non_vie:
+  premiere_annee_survenance: 2016
+  nb_annees: 10
+  lignes:
+    auto_rc:
+      lob_s2: 4                    # Motor vehicle liability
+      primes_n: 60
+      primes_n_plus_1: 62
+      croissance_primes: 0.03
+      sp_ultime: 0.72
+      cv_sp: 0.06
+      provision_cible: 150          # réserves non actualisées
+      cadence_reglement: [0.18, 0.36, 0.48, 0.58, 0.66, 0.73, 0.79, 0.84, 0.88, 0.91]
+      facteur_queue: 1.08
+      cv_increments: 0.12
+    auto_dommages:
+      lob_s2: 5                    # Other motor
+      primes_n: 35
+      primes_n_plus_1: 36
+      croissance_primes: 0.03
+      sp_ultime: 0.68
+      cv_sp: 0.05
+      provision_cible: 10
+      cadence_reglement: [0.70, 0.93, 0.98, 0.995, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+      facteur_queue: 1.0
+      cv_increments: 0.08
+    incendie_mrh:
+      lob_s2: 7                    # Fire and other damage to property
+      primes_n: 75
+      primes_n_plus_1: 78
+      croissance_primes: 0.035
+      sp_ultime: 0.63
+      cv_sp: 0.12
+      provision_cible: 45
+      cadence_reglement: [0.50, 0.78, 0.89, 0.94, 0.97, 0.985, 0.995, 1.0, 1.0, 1.0]
+      facteur_queue: 1.0
+      cv_increments: 0.10
+    rc_generale:
+      lob_s2: 8                    # General liability
+      primes_n: 45
+      primes_n_plus_1: 46
+      croissance_primes: 0.025
+      sp_ultime: 0.65
+      cv_sp: 0.10
+      provision_cible: 100
+      cadence_reglement: [0.12, 0.30, 0.45, 0.58, 0.68, 0.76, 0.83, 0.88, 0.92, 0.95]
+      facteur_queue: 1.05
+      cv_increments: 0.15
+  catastrophe:
+    capitaux_assures_mrh: 42000     # M€ de capitaux assurés
+    nb_zones_cresta: 96
+    concentration_dirichlet: 0.8
+    nb_vehicules_assures: 210000
+    top_concentrations_incendie: [120, 95, 80]   # M€ dans un rayon de 200 m
+  reassurance:
+    cession_primes: 0.06
+    xl_cat_portee: 250
+    xl_cat_priorite: 30
+
+# -----------------------------------------------------------------------------
+# SANTÉ
+# -----------------------------------------------------------------------------
+sante_nslt:
+  lob_s2: 1                         # Medical expense
+  primes_n: 60
+  primes_n_plus_1: 63
+  croissance_primes: 0.04
+  sp_ultime: 0.82
+  cv_sp: 0.03
+  provision_cible: 15
+  cadence_reglement: [0.72, 0.97, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+  facteur_queue: 1.0
+  cv_increments: 0.05
+  nb_assures: 95000
+
+sante_slt:
+  nb_model_points: 350
+  be_cible: 120
+  part_invalidite: 0.55
+  age_moyen: 49
+  age_ecart_type: 8
+  age_fin_garantie: 62
+  duree_moyenne_incapacite: 1.2     # années
+  duree_max_incapacite: 3
+  surmortalite_invalides: 3.0       # multiplicateur de q_x [INDIC]
+  primes_annuelles: 25
+
+# -----------------------------------------------------------------------------
+# FRAIS ET PROJECTION (utilisés par le moteur SCR)
+# -----------------------------------------------------------------------------
+frais:
+  gestion_pm_euro: 0.0035          # en % des PM [CHOIX]
+  gestion_pm_uc: 0.0040
+  gestion_temporaire_deces: 0.12   # en % des primes
+  gestion_sante_slt: 0.03          # en % des arrérages santé SLT
+  gestion_sinistres_non_vie: 0.04  # en % des réserves
+  ratio_frais_non_vie: 0.28        # en % des primes (provision pour primes)
+  inflation: 0.02
+
+projection:
+  horizon: 60                      # années de projection des passifs vie
+  part_primes_non_acquises: 0.50   # exposition non acquise à la date d'évaluation [CHOIX]
+
+# -----------------------------------------------------------------------------
+# V2 — GÉNÉRATEUR DE SCÉNARIOS ÉCONOMIQUES ET MODÈLE ALM
+# -----------------------------------------------------------------------------
+esg:
+  nb_scenarios: 2000
+  horizon: 40
+  graine: 7
+  antithetiques: true              # réduction de variance par variables antithétiques
+  hull_white:
+    a: 0.05                        # vitesse de retour à la moyenne [CHOIX]
+    sigma: 0.010                   # volatilité du taux court [INDIC] à calibrer sur les swaptions
+  action:
+    volatilite: 0.20               # [INDIC] à calibrer sur les options sur indice
+    rendement_dividende: 0.030
+    correlation_taux: -0.15
+  immobilier:
+    volatilite: 0.10
+    rendement_locatif: 0.042
+    correlation_taux: -0.10
+
+alm:
+  horizon: 40
+  maturite_moyenne_obligations: 8   # vitesse de renouvellement du portefeuille obligataire
+  part_pvl_actions_realisee: 0.15   # politique de réalisation des plus-values latentes
+  taux_concurrence:                 # taux servi par le marché = a x taux 10 ans + b [CHOIX]
+    coefficient_taux_10ans: 0.80
+    constante: 0.002
+    moyenne_mobile: 3               # années de lissage
+  ppe:
+    duree_reprise_max: 8            # la PPE doit être reprise sous 8 ans
+    dotation_max_rendement: 0.50    # part du rendement excédentaire pouvant être mise en PPE
+  nb_tranches_age: 4
+
+# -----------------------------------------------------------------------------
+# V4 — MODÈLE INTERNE PARTIEL NON-VIE
+# -----------------------------------------------------------------------------
+modele_interne:
+  nb_simulations: 50000
+  graine: 11
+  copule: "student"                 # "gaussienne" ou "student"
+  degres_liberte: 6                 # copule de Student : queues plus épaisses
+  quantile: 0.995
+  bootstrap:
+    nb_reechantillons: 5000
+    ajustement_biais: true
+  primes:
+    loi: "lognormale"               # ajustée sur l'historique des S/P ultimes estimés
+    incertitude_parametre: 0.15     # majoration de sigma pour l'erreur d'estimation [CHOIX]
+  catastrophe:
+    frequence_poisson: 0.6          # nombre annuel d'événements dépassant le seuil [INDIC]
+    seuil_gpd: 8.0                  # M€
+    xi: 0.35                        # indice de queue de la GPD [INDIC]
+    beta: 12.0                      # paramètre d'échelle [INDIC]
+  correlations:                     # entre blocs de risque [CHOIX, à justifier en annexe]
+    ordre: [primes, reserves, catastrophe]
+    matrice:
+      - [1.00, 0.25, 0.25]
+      - [0.25, 1.00, 0.10]
+      - [0.25, 0.10, 1.00]
+  correlations_lob:                 # entre lignes d'activité, pour primes et réserves
+    ordre: [auto_rc, auto_dommages, incendie_mrh, rc_generale]
+    matrice:
+      - [1.00, 0.50, 0.25, 0.50]
+      - [0.50, 1.00, 0.25, 0.25]
+      - [0.25, 0.25, 1.00, 0.25]
+      - [0.50, 0.25, 0.25, 1.00]
+
+usp:
+  # Facteurs de crédibilité du risque de réserve selon le nombre d'années d'historique
+  # (annexe XVII du règlement délégué) [AVERIFIER]
+  credibilite: {5: 0.34, 6: 0.43, 7: 0.51, 8: 0.59, 9: 0.67, 10: 0.74, 11: 0.81, 12: 0.87,
+                13: 0.92, 14: 0.96, 15: 1.00}
+
+cima:
+  # Marge de solvabilité du code CIMA, à titre de comparaison [AVERIFIER]
+  non_vie: {taux_primes: 0.20, taux_sinistres: 0.25}
+  vie: {taux_provisions: 0.05, taux_capitaux_sous_risque: 0.003}
+
+# -----------------------------------------------------------------------------
+# V5 — ORSA : projection pluriannuelle et scénarios adverses
+# -----------------------------------------------------------------------------
+orsa:
+  horizon: 5
+  taux_distribution: 0.30            # part du résultat net distribuée [CHOIX]
+  taux_impot: 0.25
+  plan_affaires:
+    collecte_euro: 450               # primes épargne euro, année 1
+    croissance_collecte_euro: -0.02   # décollecte progressive du fonds euro [CHOIX]
+    collecte_uc: 170
+    croissance_collecte_uc: 0.06
+    taux_sortie_euro: 0.075          # rachats et décès rapportés aux PM
+    taux_sortie_uc: 0.060
+    croissance_primes_non_vie: 0.03
+    ratio_combine_non_vie: 1.00
+    croissance_primes_sante: 0.04
+    ratio_combine_sante: 1.06
+    frais_generaux: 45               # frais de structure annuels
+    croissance_frais: 0.02
+  rendements_centraux:               # scénario central en univers réel [CHOIX]
+    prime_risque_action: 0.030
+    prime_risque_immobilier: 0.015
+    marge_financiere_conservee: 0.0035   # marge de l'assureur sur le fonds euro
+  appetence:
+    limite: 1.30                     # seuil de tolérance : plan de redressement
+    alerte: 1.60
+    cible: 2.00
+  scenarios:
+    krach_actions:
+      libelle: "Krach actions (-30 % en année 1)"
+      annee: 1
+      choc_action: -0.30
+      recuperation_annuelle: 0.08
+    hausse_taux:
+      libelle: "Hausse des taux (+200 pb) et rachats"
+      annee: 1
+      choc_taux: 0.020
+      rachats_supplementaires: 0.05
+      duree_rachats: 2
+    baisse_taux:
+      libelle: "Baisse des taux (-100 pb) durable"
+      annee: 1
+      choc_taux: -0.010
+    catastrophe:
+      libelle: "Catastrophe naturelle majeure (année 2)"
+      annee: 2
+      sinistre_net: 60
+    inflation_frais:
+      libelle: "Inflation des frais (+20 % permanent)"
+      annee: 1
+      multiplicateur_frais: 1.20
+    crise_combinee:
+      libelle: "Crise combinée (actions, taux, rachats, sinistre)"
+      annee: 1
+      choc_action: -0.25
+      choc_taux: 0.015
+      rachats_supplementaires: 0.08
+      duree_rachats: 3
+      sinistre_net: 40
+      multiplicateur_frais: 1.10
+  besoin_global:
+    # Risques mal ou non captés par la formule standard, évalués à dire d'expert [CHOIX]
+    risque_liquidite: 25
+    risque_cyber: 30
+    risque_de_modele: 40
+    risque_climatique: 35
+    diversification: 0.25            # abattement appliqué à la somme des évaluations

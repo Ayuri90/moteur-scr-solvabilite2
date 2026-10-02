@@ -1,0 +1,719 @@
+% =============================================================================
+% Cahier de calculs manuels du SCR — support pédagogique
+% Compilation : pdflatex cahier_calculs.tex (deux fois)
+% Les chiffres proviennent de chiffres_pedago.tex, engendré par generer_chiffres.py
+% =============================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage{textcomp}
+\usepackage[utf8]{inputenc}
+\IfFileExists{french.ldf}{\usepackage[french]{babel}}{%
+  \renewcommand{\tablename}{Tableau}\renewcommand{\figurename}{Figure}
+  \renewcommand{\contentsname}{Table des matières}}
+\IfFileExists{lmodern.sty}{\usepackage{lmodern}}{\usepackage{mathptmx}}
+\usepackage[margin=2.3cm,headheight=14pt]{geometry}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{xcolor}
+\usepackage{siunitx}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{microtype}
+\usepackage[hidelinks]{hyperref}
+\usepackage{mdframed}
+
+\sisetup{group-separator={\,},group-minimum-digits=4,output-decimal-marker={,}}
+\definecolor{bleufonce}{HTML}{1F3864}
+\definecolor{grisclair}{HTML}{F4F6FA}
+\definecolor{vertfonce}{HTML}{375623}
+\definecolor{rouge}{HTML}{C00000}
+
+\titleformat{\section}{\color{bleufonce}\large\bfseries}{\thesection}{0.7em}{}
+\titleformat{\subsection}{\color{bleufonce}\normalsize\bfseries}{\thesubsection}{0.6em}{}
+\setlist[itemize]{itemsep=2pt,topsep=3pt,leftmargin=1.2em}
+\setlist[enumerate]{itemsep=2pt,topsep=3pt,leftmargin=1.5em}
+
+\pagestyle{fancy}\fancyhf{}
+\fancyhead[L]{\small\color{bleufonce}Cahier de calculs manuels du SCR}
+\fancyhead[R]{\small\color{bleufonce}\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\newmdenv[backgroundcolor=grisclair,linecolor=bleufonce,linewidth=0.8pt,
+          innertopmargin=6pt,innerbottommargin=6pt,skipabove=8pt,skipbelow=8pt]{methode}
+\newcommand{\piege}[1]{\par\smallskip\noindent\textcolor{rouge}{\textbf{Piège.}} #1\par\smallskip}
+\newcommand{\astuce}[1]{\par\smallskip\noindent\textcolor{vertfonce}{\textbf{À retenir.}} #1\par\smallskip}
+\newcommand{\Meuro}{\text{M\texteuro}}
+
+\input{chiffres_pedago}
+
+\begin{document}
+
+\begin{titlepage}
+\centering
+\vspace*{3cm}
+{\color{bleufonce}\Huge\bfseries Cahier de calculs manuels du SCR\par}
+\vspace{0.8cm}
+{\LARGE Comprendre la formule standard en la refaisant à la main\par}
+\vspace{2cm}
+\begin{minipage}{0.82\linewidth}\small
+Ce cahier reprend, module par module, les calculs du projet « compagnie composite ». Chaque
+notion est d'abord posée en formule, puis appliquée à un chiffre réel du portefeuille, avec
+toutes les étapes intermédiaires. L'objectif est qu'un lecteur qui découvre Solvabilité~II
+puisse refaire chaque calcul avec une calculatrice, et retrouver exactement les résultats du
+modèle.
+
+\vspace{0.4cm}
+Compagnie : actif de \num{11000} \Meuro{}, date d'évaluation 31 décembre 2025, courbe des taux
+publiée par l'EIOPA. Tous les montants sont en millions d'euros.
+\end{minipage}
+\vfill
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% =============================================================================
+\section{L'idée centrale, en une page}
+
+Solvabilité~II demande à l'assureur de détenir assez de fonds propres pour absorber un choc
+bicentenaire. Formellement, le SCR est la valeur en risque à \qty{99.5}{\percent}, à l'horizon
+d'un an, de la variation des fonds propres économiques.
+
+La formule standard remplace cette définition probabiliste par une recette : appliquer des chocs
+calibrés, mesurer la perte de fonds propres, puis agréger. D'où l'unique formule à retenir :
+
+\begin{methode}
+\[
+\boxed{\ \mathrm{SCR}_{\text{sous-module}} \;=\; \max\bigl(0,\; \mathrm{FPB}_{\text{avant}}
+- \mathrm{FPB}_{\text{après choc}}\bigr)\ }
+\]
+où les fonds propres de base valent
+\[
+\mathrm{FPB} \;=\; \underbrace{A}_{\text{actif en valeur de marché}}
+\;-\; \underbrace{\mathrm{BE}}_{\text{best estimate}}
+\;-\; \underbrace{\mathrm{MR}}_{\text{marge de risque}}
+\;-\; \text{autres passifs}.
+\]
+\end{methode}
+
+\piege{Le SCR n'est \emph{pas} la perte d'actif. Si l'actif baisse de 100 et que les provisions
+baissent de 30 parce que la participation aux bénéfices s'ajuste, le SCR vaut 70. C'est toute la
+différence entre calcul brut et calcul net, et c'est la source d'erreur numéro un.}
+
+Trois familles de chocs coexistent :
+\begin{itemize}
+\item les chocs \textbf{de marché}, qui frappent d'abord l'actif (taux, action, immobilier,
+      spread, change, concentration) ;
+\item le choc \textbf{de contrepartie}, qui suit une logique de perte en cas de défaut ;
+\item les chocs \textbf{de souscription}, qui frappent le passif en modifiant les hypothèses
+      (mortalité, rachats, frais, sinistralité).
+\end{itemize}
+
+L'agrégation se fait ensuite par des matrices de corrélation, toujours avec la même forme :
+\[
+\mathrm{SCR}_{\text{agrégé}} = \sqrt{\sum_{i}\sum_{j} \mathrm{Corr}_{i,j}\,
+\mathrm{SCR}_i\,\mathrm{SCR}_j}.
+\]
+
+\astuce{Cette racine est toujours inférieure à la somme des SCR : c'est le bénéfice de
+diversification. Deux risques parfaitement corrélés ($\mathrm{Corr}=1$) s'additionnent ; deux
+risques indépendants ($\mathrm{Corr}=0$) s'agrègent en racine de la somme des carrés.}
+
+% =============================================================================
+\section{Préalable : actualiser, et valoriser une obligation}
+
+Tout part de la courbe des taux sans risque. Un flux $F$ reçu dans $t$ années vaut aujourd'hui
+$F \times (1+s_t)^{-t}$, où $s_t$ est le taux zéro-coupon de maturité $t$.
+
+Pour une obligation, on actualise au taux sans risque \emph{majoré du spread} de l'émetteur :
+\[
+P = \sum_{t=1}^{n} \frac{C}{(1+s_t+\sigma)^t} + \frac{N}{(1+s_n+\sigma)^n}.
+\]
+
+\subsection{Application : la ligne \OblId{}}
+
+Caractéristiques : émetteur \OblEmetteur{}, échelon de qualité de crédit \OblCqs{}, coupon
+\OblCoupon{}~\%, maturité \OblMaturite{} ans, spread \OblSpread{} points de base, nominal
+\OblNominal{} \Meuro{}.
+
+Au bout de \OblMaturite{} ans, le taux sans risque vaut \OblSpotHuit{}~\%. En ajoutant le spread,
+on actualise donc à \OblTauxActu{}~\%.
+
+\begin{table}[h]\centering\small
+\caption{Les premiers flux, pour 100 de nominal}
+\begin{tabular}{crrrr}
+\toprule
+$t$ & Flux & $s_t$ & $(1+s_t+\sigma)^{-t}$ & Flux actualisé\\
+\midrule
+\tableauFlux
+\bottomrule
+\end{tabular}
+\end{table}
+
+En sommant sur les \OblMaturite{} années :
+\[
+P = \underbrace{\OblPVCoupons{}}_{\text{coupons}} + \underbrace{\OblPVPrincipal{}}_{\text{remboursement}}
+= \OblPrix{} \quad \text{pour 100 de nominal.}
+\]
+La valeur de marché de la ligne vaut donc
+$\OblNominal{} \times \OblPrix{} / 100 = \OblVM{}$ \Meuro{}.
+
+\astuce{Le prix dépasse 100 parce que le coupon (\OblCoupon{}~\%) est supérieur au rendement
+actuel (\OblTauxActu{}~\%) : le titre a été émis quand les taux étaient plus élevés. L'inverse
+donne un titre sous le pair, donc une moins-value latente.}
+
+\subsection{La duration modifiée}
+
+La duration modifiée mesure la sensibilité du prix à une variation de taux :
+\[
+D_m \simeq -\frac{1}{P}\frac{\Delta P}{\Delta s}.
+\]
+Pour notre ligne, $D_m = \OblDuration{}$. Concrètement, une hausse de 1~\% des taux fait perdre
+environ \OblDuration{}~\% de la valeur. On l'utilise dans le sous-module spread, et comme
+approximation de contrôle dans le sous-module taux.
+
+% =============================================================================
+\section{Risque de marché}
+
+\subsection{Spread (art. 176)}
+
+Le choc de spread est un pourcentage de perte appliqué à la valeur de marché, fonction de
+l'échelon de crédit et de la duration :
+\[
+\mathrm{stress}(q,d) = a_{q,k} + b_{q,k}\,\bigl(d - \underline{d}_k\bigr),
+\]
+où $k$ est la bande de duration : $d \le 5$, puis $]5,10]$, $]10,15]$, $]15,20]$, $>20$.
+
+\begin{methode}
+\textbf{Application.} Notre ligne est en échelon \OblCqs{} avec une duration de \OblDuration{},
+donc dans la bande $]5,10]$, où $a = \OblBandeA{}~\%$ et $b = \OblBandeB{}~\%$ :
+\[
+\mathrm{stress} = \OblBandeA{}\,\% + \OblBandeB{}\,\% \times (\OblDuration{} - 5) = \OblStress{}\,\%
+\]
+\[
+\text{perte} = \OblStress{}\,\% \times \OblVM{} = \OblPerteSpread{}~\Meuro{}
+\]
+\end{methode}
+
+Le calcul est répété ligne à ligne, puis les pertes sont sommées. Deux exemptions à connaître :
+les obligations souveraines de l'Espace économique européen libellées en monnaie locale ont un
+facteur nul, et les obligations sécurisées bénéficient d'un traitement réduit.
+
+\piege{La duration est \emph{plancher\-née à 1 an}. Un titre à trois mois en échelon 3 subit donc
+le stress d'un titre à un an, pas le quart.}
+
+\subsection{Taux d'intérêt (art. 166 et 167)}
+
+Deux scénarios sont testés, et le plus défavorable est retenu :
+\[
+s_t^{\uparrow} = s_t + \max\bigl(1\,\%,\; f^{\uparrow}_t \times |s_t|\bigr),
+\qquad
+s_t^{\downarrow} = \begin{cases} s_t & \text{si } s_t < 0,\\[2pt]
+s_t - f^{\downarrow}_t \times |s_t| & \text{sinon.}\end{cases}
+\]
+Les facteurs $f_t$ décroissent avec la maturité : \num{0.70} à un an, \num{0.42} à dix ans,
+\num{0.20} au-delà de 90 ans à la hausse. Ils figurent dans l'onglet \texttt{Shocks} du fichier
+publié chaque mois par l'EIOPA.
+
+\begin{methode}
+\textbf{Application à notre obligation.} À \OblMaturite{} ans, le taux passe de \OblSpotHuit{}~\%
+à \OblSpotHuitChoc{}~\% (soit $+\OblFacteurChoc{}\,\%$ en relatif). En réactualisant tous les flux
+avec la courbe choquée :
+\[
+P^{\uparrow} = \OblPrixChoc{} \quad\Rightarrow\quad
+\text{VM}^{\uparrow} = \OblVMChoc{}~\Meuro{}, \qquad
+\text{perte} = \OblPerteTaux{}~\Meuro{}.
+\]
+Contrôle par la duration : $\OblVM{} \times \OblDuration{} \times \Delta s \simeq
+\OblPerteApprochee{}$ \Meuro{}. L'écart avec le calcul exact vient de la convexité et du fait que
+le choc n'est pas parallèle.
+\end{methode}
+
+\piege{Le sous-module taux est le seul où le \emph{passif} bouge autant que l'actif. Une hausse
+des taux réduit la valeur des obligations, mais réduit aussi le best estimate puisque les flux
+futurs sont actualisés plus fortement. Le SCR est l'effet net sur les fonds propres, souvent bien
+plus faible que la perte d'actif.}
+
+\subsection{Actions (art. 168 à 172)}
+
+Trois catégories, trois chocs. L'ajustement symétrique, publié chaque mois, ajoute ou retranche
+jusqu'à 10 points selon la position du marché dans son cycle.
+
+\begin{table}[h]\centering\small
+\caption{Assiettes et chocs action du portefeuille}
+\begin{tabular}{lrrr}
+\toprule
+Catégorie & Valeur de marché & Choc & Perte\\
+\midrule
+\tableauAction
+\bottomrule
+\end{tabular}
+\end{table}
+
+L'agrégation entre les deux types se fait avec une corrélation de \ActionRho{} :
+\[
+\mathrm{SCR}_{\text{action}} = \sqrt{\mathrm{SCR}_1^2 + 2 \times \ActionRho{} \times
+\mathrm{SCR}_1 \mathrm{SCR}_2 + \mathrm{SCR}_2^2}
+= \sqrt{\ActionUn{}^2 + 2 \times \ActionRho{} \times \ActionUn{} \times \ActionDeux{}
++ \ActionDeux{}^2} = \ActionAgrege{}~\Meuro{}.
+\]
+
+\subsection{Immobilier (art. 174)}
+
+Le plus simple des sous-modules : un choc de \ImmoChoc{}~\% sur toute la poche immobilière,
+immeubles d'exploitation compris.
+\[
+\mathrm{SCR}_{\text{immo}} = \ImmoChoc{}\,\% \times \ImmoAssiette{} = \ImmoPerte{}~\Meuro{}.
+\]
+
+\subsection{Change (art. 188)}
+
+Pour chaque devise, on teste une hausse et une baisse de \ChangeChoc{}~\% et on retient la pire.
+
+\begin{table}[h]\centering\small
+\caption{Positions en devises et perte associée}
+\begin{tabular}{lrr}
+\toprule
+Devise & Exposition & Perte à \ChangeChoc{}~\%\\
+\midrule
+\tableauChange
+\bottomrule
+\end{tabular}
+\end{table}
+
+Total des expositions hors euro : \ChangeTotal{} \Meuro{}, soit une perte brute de
+\ChangePerte{} \Meuro{}. Le SCR retenu par le modèle est inférieur, car une partie de ces actifs
+représente des contrats en unités de compte : leur baisse réduit aussi le passif.
+
+\subsection{Concentration (art. 184)}
+
+On ne sanctionne pas l'exposition, mais son \emph{excès} au-delà d'un seuil de tolérance :
+\[
+\mathrm{XS}_i = \max\Bigl(0,\; \frac{E_i}{A} - \mathrm{CT}_q\Bigr),
+\qquad
+\mathrm{Conc}_i = A \times \mathrm{XS}_i \times g_q,
+\qquad
+\mathrm{SCR}_{\text{conc}} = \sqrt{\sum_i \mathrm{Conc}_i^2}.
+\]
+
+\begin{methode}
+\textbf{Application.} Actif retenu : $A = \ConcActifs{}$ \Meuro{} (hors unités de compte et hors
+souverains). Le plus gros groupe d'émetteurs est \ConcEmetteur{}, avec \ConcExpo{} \Meuro{},
+soit \ConcPart{}~\% de l'actif. Son échelon donne un seuil de \ConcSeuil{}~\% et un facteur
+$g = \ConcFacteur{}~\%$ :
+\[
+\mathrm{XS} = \ConcPart{}\,\% - \ConcSeuil{}\,\% = \ConcXS{},
+\qquad
+\mathrm{Conc} = \ConcActifs{} \times \ConcXS{} \times \ConcFacteur{}\,\% = \ConcPremier{}~\Meuro{}.
+\]
+\end{methode}
+
+\begin{table}[h]\centering\small
+\caption{Quatre plus grandes expositions}
+\begin{tabular}{lrrcrrr}
+\toprule
+Groupe & Exposition & Part & Éch. & Seuil & XS & Contribution\\
+\midrule
+\tableauConcentration
+\bottomrule
+\end{tabular}
+\end{table}
+
+En sommant les carrés sur tous les groupes puis en prenant la racine :
+$\mathrm{SCR}_{\text{conc}} = \ConcTotal{}$ \Meuro{}.
+
+\piege{La racine de la somme des carrés suppose les défauts \emph{indépendants} entre émetteurs.
+Un seul gros émetteur au-dessus du seuil peut donc porter presque tout le sous-module.}
+
+\subsection{Agrégation du module marché (art. 164)}
+
+\begin{table}[h]\centering\small
+\caption{Matrice de corrélation du module marché (scénario de hausse des taux, $A = 0$)}
+\begin{tabular}{lcccccc r}
+\toprule
+& taux & action & immo & spread & change & conc. & SCR\\
+\midrule
+\tableauMatriceMarche
+\bottomrule
+\end{tabular}
+\end{table}
+
+\[
+\mathrm{SCR}_{\text{marché}} = \sqrt{\mathbf{v}^{\top}\mathbf{C}\,\mathbf{v}}
+= \sqrt{\MarcheQuadratique{}} = \MarcheAgrege{}~\Meuro{},
+\]
+à comparer à la somme brute de \MarcheSomme{} \Meuro{} : la diversification économise
+\MarcheDiversification{} \Meuro{}.
+
+\astuce{Le paramètre $A$ vaut 0 si c'est le scénario de hausse des taux qui est retenu, et
+\num{0.5} si c'est celui de baisse. Autrement dit, une baisse des taux est réputée aller de pair
+avec la chute des actions et l'écartement des spreads, alors qu'une hausse est traitée comme
+indépendante.}
+
+% =============================================================================
+\section{Risque de défaut de la contrepartie}
+
+Ici, la logique change : on ne choque plus un prix, on modélise une perte en cas de défaut.
+Deux ingrédients : la perte en cas de défaut (LGD) et la probabilité de défaut (PD), déduite de
+l'échelon de qualité de crédit.
+
+\begin{table}[h]\centering\small
+\caption{Expositions de type 1}
+\begin{tabular}{lcrrr}
+\toprule
+Contrepartie & Éch. & Exposition & LGD & PD\\
+\midrule
+\tableauContrepartie
+\bottomrule
+\end{tabular}
+\end{table}
+
+La LGD vaut \qty{50}{\percent} de l'exposition pour les réassureurs — on suppose récupérer la
+moitié — et \qty{100}{\percent} pour la trésorerie.
+
+\subsection{La formule de variance}
+
+\[
+V = \sum_{j,k} \frac{\mathrm{PD}_j \mathrm{PD}_k}
+{1{,}25(\mathrm{PD}_j+\mathrm{PD}_k) - \mathrm{PD}_j\mathrm{PD}_k}\,
+\mathrm{TLGD}_j \mathrm{TLGD}_k
+\;+\; \sum_j \frac{1{,}5\,\mathrm{PD}_j(1-\mathrm{PD}_j)}{2{,}5-\mathrm{PD}_j}
+\sum_{i \in j}\mathrm{LGD}_i^2
+\]
+
+Le premier terme capte la dépendance entre contreparties, le second le risque propre à chacune.
+On regroupe d'abord les expositions par probabilité de défaut :
+
+\[
+\mathrm{TLGD}(\mathrm{PD}=\CpPDun{}\,\%) = \CpTLGDun{}, \qquad
+\mathrm{TLGD}(\mathrm{PD}=\CpPDdeux{}\,\%) = \CpTLGDdeux{}.
+\]
+
+\begin{methode}
+\textbf{Application.} La double somme et le terme diagonal (\CpDiagonale{}) donnent
+$V = \CpVariance{}$, donc $\sqrt{V} = \CpRacine{}$ \Meuro{}.
+
+On compare ensuite à la LGD totale, \CpLGDtotal{} \Meuro{} :
+\[
+\sqrt{V} = \CpRacine{} \;\le\; 5\,\% \times \CpLGDtotal{} = \CpSeuil{}
+\quad\Longrightarrow\quad
+\mathrm{SCR}_1 = 3\sqrt{V} = \CpUn{}~\Meuro{}.
+\]
+\end{methode}
+
+\astuce{La règle à trois branches ($3\sqrt{V}$, $5\sqrt{V}$, ou la LGD totale) est une
+approximation de quantile : plus le portefeuille est concentré, plus le multiplicateur monte,
+jusqu'au cas extrême où l'on provisionne la perte totale.}
+
+\subsection{Type 2 et agrégation}
+
+Les créances suivent un traitement forfaitaire :
+\[
+\mathrm{SCR}_2 = 15\,\% \times \CpCreances{} + 90\,\% \times \CpEchues{} = \CpDeux{}~\Meuro{},
+\]
+la forte pénalisation des créances échues depuis plus de trois mois reflétant leur probabilité
+de non-recouvrement. Puis
+\[
+\mathrm{SCR}_{\text{déf}} = \sqrt{\mathrm{SCR}_1^2 + 1{,}5\,\mathrm{SCR}_1\mathrm{SCR}_2
++ \mathrm{SCR}_2^2} = \CpAgrege{}~\Meuro{}.
+\]
+
+% =============================================================================
+\section{Risque de souscription vie}
+
+Le principe est différent des modules d'actif : on modifie une hypothèse, on \textbf{reprojette
+entièrement} les provisions, et le SCR est la hausse du best estimate.
+
+\begin{table}[h]\centering\small
+\caption{Les sept chocs du module vie}
+\begin{tabularx}{\linewidth}{lXl}
+\toprule
+Sous-module & Choc & Article\\
+\midrule
+Mortalité & $q_x \rightarrow 1{,}15\,q_x$, définitivement & 137\\
+Longévité & $q_x \rightarrow 0{,}80\,q_x$, définitivement & 138\\
+Invalidité & hausse des entrées, baisse des sorties & 139\\
+Rachat & $\times 1{,}5$, ou $\times 0{,}5$, ou rachat immédiat de \qty{40}{\percent} & 142\\
+Frais & $+10\,\%$ de frais et $+1$ point d'inflation & 143\\
+Révision & $+3\,\%$ sur les rentes révisables & 141\\
+Catastrophe & $q_x \rightarrow q_x + 0{,}15$ point, la première année seulement & 144\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Le seul choc calculable de tête : la catastrophe}
+
+La surmortalité de \VieCatChoc{} point s'applique une année, aux capitaux sous risque :
+\[
+\mathrm{SCR}_{\text{cat}} \simeq \VieCatChoc{}\,\% \times \VieCapitaux{} = \VieCatPerte{}~\Meuro{},
+\]
+à comparer aux \VieCatModele{} \Meuro{} du modèle. L'écart tient à l'actualisation et au fait que
+les décès surviennent en moyenne en milieu d'année.
+
+\astuce{Ce calcul est le meilleur contrôle de cohérence du module vie. Si votre SCR catastrophe
+s'écarte de \qty{0.15}{\percent} des capitaux sous risque, c'est que les capitaux sont mal
+agrégés.}
+
+\subsection{Mortalité et longévité : pourquoi ils ne s'annulent pas}
+
+Les deux chocs vont en sens inverse, mais ils ne portent pas sur les mêmes contrats. Une hausse
+de la mortalité coûte cher sur les garanties décès ; une baisse coûte cher sur les rentes.
+Le règlement demande de retenir, pour chaque contrat, le choc qui \emph{augmente} les provisions.
+D'où une corrélation négative ($-0{,}25$) dans la matrice, mais jamais une compensation totale.
+
+Dans notre portefeuille, le choc de mortalité coûte \VieMortaliteModele{} \Meuro{}, l'essentiel
+venant de la temporaire décès.
+
+\subsection{Rachat massif : le sous-module dominant}
+
+Le choc consiste à supposer que \VieMassifTaux{}~\% des contrats sont rachetés immédiatement.
+Pour chaque contrat, on compare :
+\begin{itemize}
+\item ce que l'on doit payer tout de suite, c'est-à-dire la valeur de rachat ;
+\item ce que le contrat valait dans les comptes, c'est-à-dire son best estimate.
+\end{itemize}
+Si la valeur de rachat dépasse le best estimate, le rachat coûte de l'argent et le choc
+s'applique. Sinon, il est favorable et \emph{n'est pas retenu}. Ce tri se fait contrat par
+contrat, jamais globalement. Dans notre cas, le rachat ressort à \VieMassifModele{} \Meuro{},
+soit le premier poste du module vie.
+
+\piege{Beaucoup d'étudiants appliquent le choc massif à tout le portefeuille et obtiennent un
+chiffre trop faible, car les contrats favorables viennent compenser. La sélection contrat par
+contrat est explicitement demandée à l'article 142.}
+
+\subsection{Agrégation du module vie}
+
+\begin{table}[h]\centering\small
+\caption{Matrice de corrélation vie et SCR par sous-module}
+\begin{tabular}{lccccccc r}
+\toprule
+& mort. & long. & inval. & rachat & frais & révis. & cat. & SCR\\
+\midrule
+\tableauMatriceVie
+\bottomrule
+\end{tabular}
+\end{table}
+
+Somme brute : \VieSomme{} \Meuro{}. Après agrégation : \VieAgrege{} \Meuro{}.
+
+% =============================================================================
+\section{Risque de souscription non-vie}
+
+\subsection{Primes et réserves}
+
+Ce sous-module traite d'un coup deux incertitudes : le coût des sinistres à venir (primes) et
+l'écart entre les provisions constituées et le coût final (réserves). Pour chaque ligne
+d'activité :
+\[
+\sigma_s = \frac{\sqrt{(\sigma_{p}V_{p})^2 + \sigma_{p}V_{p}\,\sigma_{r}V_{r} + (\sigma_{r}V_{r})^2}}
+{V_{p}+V_{r}}
+\]
+où $V_p$ est le volume de primes de l'année à venir et $V_r$ le best estimate de sinistres. Les
+écarts types $\sigma_p$ et $\sigma_r$ sont donnés par l'annexe~II du règlement.
+
+\begin{methode}
+\textbf{Application à la ligne \NvLob{}.} $V_p = \NvVp{}$, $V_r = \NvVr{}$,
+$\sigma_p = \NvSigmaP{}~\%$, $\sigma_r = \NvSigmaR{}~\%$ :
+\[
+\sigma_s = \frac{\NvNumerateur{}}{\NvVp{} + \NvVr{}} = \NvSigmaLob{}\,\%.
+\]
+\end{methode}
+
+\begin{table}[h]\centering\small
+\caption{Volumes et écarts types par ligne d'activité}
+\begin{tabular}{lrrrrr}
+\toprule
+Ligne & $V_p$ & $V_r$ & $\sigma_p$ & $\sigma_r$ & $\sigma_s$\\
+\midrule
+\tableauNonVie
+\bottomrule
+\end{tabular}
+\end{table}
+
+Les lignes sont ensuite agrégées par la matrice de corrélation de l'annexe~IV, ce qui donne un
+écart type global de \NvSigmaGlobal{}~\% sur un volume total de \NvVolumeTotal{} \Meuro{}. Le
+SCR vaut alors trois fois cet écart type :
+\[
+\mathrm{SCR}_{\text{primes, réserves}} = 3 \times \NvSigmaGlobal{}\,\% \times \NvVolumeTotal{}
+= \NvPrimesReserves{}~\Meuro{}.
+\]
+
+\astuce{Pourquoi 3 ? Parce que sous une hypothèse log-normale, le quantile à \qty{99.5}{\percent}
+se situe à environ trois écarts types de la moyenne. Le facteur 3 est donc le
+« \num{99.5}\textsuperscript{e} percentile » déguisé.}
+
+\subsection{Catastrophe et réassurance}
+
+La charge catastrophe brute ressort à \NvCatBrut{} \Meuro{}. Le traité en excédent de sinistres,
+de priorité \NvPriorite{} \Meuro{} et de portée \NvPortee{} \Meuro{}, la ramène à :
+\[
+L^{\text{net}} = \min(L, \NvPriorite{}) + \max(0,\; L - \NvPriorite{} - \NvPortee{})
+= \NvCatNet{}~\Meuro{}.
+\]
+Le module non-vie agrégé vaut \NvAgrege{} \Meuro{}.
+
+\piege{La réassurance ne se déduit pas du SCR après coup : elle s'applique sinistre par sinistre,
+\emph{avant} l'agrégation. Un traité qui plafonne les sinistres extrêmes réduit surtout la queue
+de distribution, donc le SCR, et beaucoup moins la charge moyenne.}
+
+% =============================================================================
+\section{Risque opérationnel (art. 204)}
+
+Aucun choc ici : une formule forfaitaire fondée sur les volumes, puis un plafond.
+\[
+\mathrm{SCR}_{\text{op}} = \min\bigl(30\,\% \times \mathrm{BSCR},\;
+\max(\mathrm{Op}_{\text{primes}}, \mathrm{Op}_{\text{provisions}})\bigr)
++ 25\,\% \times \text{frais sur unités de compte}
+\]
+
+\begin{methode}
+\textbf{Application.}
+\begin{align*}
+\mathrm{Op}_{\text{primes}} &= 4\,\% \times \OpPrimesVie{} + 3\,\% \times \OpPrimesNonVie{}
+= \OpPrimes{}~\Meuro{}\\
+\mathrm{Op}_{\text{provisions}} &= 0{,}45\,\% \times \OpProvVie{} + 3\,\% \times \OpProvNonVie{}
+= \OpProvisions{}~\Meuro{}\\
+\text{maximum retenu} &= \OpProvisions{}, \qquad
+\text{plafond} = 30\,\% \times \mathrm{BSCR} = \OpPlafond{}\\
+\mathrm{SCR}_{\text{op}} &= \OpProvisions{} + 25\,\% \times \OpFraisUC{} = \OpTotal{}~\Meuro{}
+\end{align*}
+\end{methode}
+
+\astuce{Le plafond de \qty{30}{\percent} du BSCR ne mord presque jamais pour un assureur vie de
+taille normale : il protège surtout contre les portefeuilles à très gros volumes et très faible
+risque.}
+
+% =============================================================================
+\section{Du BSCR au SCR, puis au MCR}
+
+\subsection{Agrégation des cinq modules}
+
+\begin{table}[h]\centering\small
+\caption{Matrice de corrélation du BSCR et SCR par module}
+\begin{tabular}{lccccc r}
+\toprule
+& marché & défaut & vie & santé & non-vie & SCR\\
+\midrule
+\tableauMatriceBscr
+\bottomrule
+\end{tabular}
+\end{table}
+
+Somme brute : \BscrSomme{} \Meuro{}. Après agrégation : $\mathrm{BSCR} = \BscrAgrege{}$ \Meuro{},
+soit \BscrDiversification{} \Meuro{} de diversification.
+
+\subsection{Les deux ajustements}
+
+\textbf{Capacité d'absorption des provisions techniques.} Si, en scénario choqué, l'assureur peut
+réduire la participation aux bénéfices futurs, une partie du choc est supportée par les assurés.
+L'ajustement est négatif, plafonné par le montant des prestations discrétionnaires futures. Dans
+notre modèle déterministe, cette absorption est déjà intégrée dans la reprojection des
+provisions : l'ajustement explicite est donc nul. C'est le modèle stochastique qui permet de
+l'isoler.
+
+\textbf{Capacité d'absorption des impôts différés.} Une perte bicentenaire réduirait l'impôt
+futur. On peut donc déduire cet impôt économisé, à condition de démontrer qu'il serait
+effectivement récupérable :
+\[
+\text{plafond théorique} = 25\,\% \times (\mathrm{BSCR} + \mathrm{SCR}_{\text{op}}) = \LacPlafond{}~\Meuro{}.
+\]
+La capacité réellement justifiable se limite ici aux \LacIdp{} \Meuro{} d'impôts différés passifs
+au bilan, augmentés de \LacPart{}~\% de l'écart, au titre des bénéfices futurs :
+$\mathrm{Adj}_{\mathrm{DT}} = \LacDt{}$ \Meuro{}.
+
+\piege{Confondre le plafond réglementaire et la capacité justifiable est l'erreur classique. Le
+règlement autorise jusqu'au taux d'impôt appliqué au choc, mais l'entreprise doit prouver qu'elle
+retrouvera des bénéfices imposables. Un superviseur regarde d'abord cette démonstration.}
+
+\subsection{Le SCR}
+
+\[
+\mathrm{SCR} = \mathrm{BSCR} + \mathrm{SCR}_{\text{op}} + \mathrm{Adj}_{\mathrm{TP}}
++ \mathrm{Adj}_{\mathrm{DT}}
+= \BscrAgrege{} + \OpTotal{} + 0 + (\LacDt{}) = \ScrFinal{}~\Meuro{}.
+\]
+
+Avec des fonds propres de base de \FondsPropres{} \Meuro{}, le ratio de couverture vaut
+\[
+\frac{\FondsPropres{}}{\ScrFinal{}} = \RatioScr{}\,\%.
+\]
+
+\subsection{Le MCR}
+
+Le minimum de capital requis est un filet de sécurité, calculé de façon linéaire puis encadré :
+\begin{align*}
+\mathrm{MCR}_{\text{linéaire}} &= \McrVie{} \text{ (vie)} + \McrNonVie{} \text{ (non-vie et santé)}
+= \McrLineaire{}~\Meuro{}\\
+\text{corridor} &: \max(25\,\% \times \mathrm{SCR}) = \McrPlancher{}, \quad
+\min(45\,\% \times \mathrm{SCR}) = \McrPlafond{}\\
+\mathrm{MCR} &= \McrRetenu{}~\Meuro{}, \qquad \text{ratio de couverture} = \RatioMcr{}\,\%.
+\end{align*}
+
+\astuce{Le MCR se situe toujours entre \qty{25}{\percent} et \qty{45}{\percent} du SCR. S'il sort
+de ces bornes, c'est le corridor qui tranche, jamais le calcul linéaire. Franchir le MCR déclenche
+le retrait d'agrément : c'est le seuil le plus grave du régime.}
+
+% =============================================================================
+\section{Récapitulatif et erreurs fréquentes}
+
+\begin{table}[h]\centering\small
+\caption{Le chemin complet, en un tableau}
+\begin{tabularx}{\linewidth}{Xr}
+\toprule
+Étape & \Meuro{}\\
+\midrule
+Risque de marché (six sous-modules agrégés) & \MarcheAgrege{}\\
+Risque de défaut de la contrepartie & \CpAgrege{}\\
+Risque de souscription vie & \VieAgrege{}\\
+Risque de souscription non-vie & \NvAgrege{}\\
+\textbf{BSCR après diversification} & \textbf{\BscrAgrege{}}\\
+Risque opérationnel & \OpTotal{}\\
+Capacité d'absorption des impôts différés & \LacDt{}\\
+\textbf{SCR} & \textbf{\ScrFinal{}}\\
+MCR & \McrRetenu{}\\
+Fonds propres de base & \FondsPropres{}\\
+\textbf{Ratio de couverture du SCR} & \textbf{\RatioScr{}\,\%}\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Les huit erreurs les plus fréquentes}
+
+\begin{enumerate}
+\item Confondre perte d'actif et perte de fonds propres : le passif bouge aussi.
+\item Oublier de retenir le maximum entre hausse et baisse des taux, et de choisir le paramètre
+      $A$ correspondant.
+\item Additionner les sous-modules au lieu de les agréger, ce qui surestime largement le SCR.
+\item Appliquer le rachat massif globalement au lieu de contrat par contrat.
+\item Retenir un choc favorable : un sous-module ne peut pas produire un SCR négatif.
+\item Actualiser les provisions non-vie avec un taux unique au lieu de la courbe et de la cadence
+      de règlement.
+\item Prendre le plafond réglementaire de la capacité d'absorption fiscale sans justifier des
+      bénéfices futurs.
+\item Oublier la mise en transparence des OPC : un fonds obligataire porte du risque de spread et
+      de taux, pas un risque « fonds ».
+\end{enumerate}
+
+\subsection{Pour s'entraîner}
+
+Quelques calculs à refaire seul, dont les réponses figurent plus haut :
+\begin{enumerate}
+\item Recalculer le prix de l'obligation \OblId{} à partir de la courbe, puis sa perte sous choc
+      de spread.
+\item Vérifier le SCR catastrophe vie à partir des capitaux sous risque.
+\item Refaire l'agrégation du module marché à la main, matrice en main, et retrouver
+      \MarcheAgrege{} \Meuro{}.
+\item Recalculer $\sigma_s$ pour une autre ligne non-vie que \NvLob{}.
+\item Vérifier que le MCR tombe bien dans le corridor \qty{25}{\percent}–\qty{45}{\percent}.
+\end{enumerate}
+
+\vfill
+\begin{center}\small\itshape
+Tous les chiffres de ce cahier sont engendrés depuis les données et les résultats du modèle :
+les refaire à la main doit donner exactement les mêmes valeurs.
+\end{center}
+
+\end{document}
